@@ -1,0 +1,20 @@
+#Deployment Plugin Project File
+#Thu Jun 15 10:22:58 CEST 2017
+build.ant.name=<.>\\target\\resources\\dp\\com.italtel.iota.demo.virtual_gas_meter_build.xml
+build.dp.file=<.>\\target\\resources\\dp\\com.italtel.iota.demo.virtual_gas_meter.dp
+build.location=
+bundles.0.bundle_path=<.>\\.project
+bundles.0.customizer=false
+bundles.0.headers.count=0
+bundles.0.missing=false
+bundles.0.name=bundles/com.italtel.iota.demo.virtual_gas_meter.jar
+bundles.0.symbolic_name=com.italtel.iota.demo.virtual_gas_meter;singleton\:\=true
+bundles.0.version=1.0.100
+bundles.count=1
+certificates.count=0
+general.signbundles=false
+headers.other.headers=
+headers.symbolic.name=com.italtel.iota.demo.virtual_gas_meter
+headers.version=1.0.0
+resources.count=0
+
