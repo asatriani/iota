@@ -27,21 +27,20 @@
             default="450"
             description="Initial value for the measure metric."/>
 
-        <AD id="publish.rate"  
-            name="publish.rate"
-            type="Integer"
+        <AD id="publish.cron.expr"  
+            name="publish.cron.expr"
+            type="String"
             cardinality="0" 
             required="true"
-            default="2"
-            min="1" 
-            description="Default message publishing rate in seconds (min 1)."/>
+            default="0 0/1 * 1/1 * ? *" 
+            description="Default cron expression to schedule sending measure."/>
 
         <AD id="publish.semanticTopic"  
             name="publish.semanticTopic"
             type="String"
             cardinality="0" 
             required="true"
-            default="data" 
+            default="measure" 
             description="Default semantic topic to publish the messages to."/>
         
         <AD id="publish.qos"  
