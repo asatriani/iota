@@ -37,6 +37,8 @@ public class SendMeasureJob implements Job {
                 double measure = virtualGasMeter.getMeasures().get(nameMeter) + comsumption;
                 virtualGasMeter.getMeasures().put(nameMeter, measure);
 
+                String finalTopic = new StringBuilder(nameMeter).append("/").append(topic).toString();
+
                 // Allocate a new payload
                 KuraPayload payload = new KuraPayload();
 
@@ -45,14 +47,18 @@ public class SendMeasureJob implements Job {
 
                 // Add metric to the payload
                 payload.addMetric("value", measure);
-                payload.addMetric("meterID", nameMeter);
+                payload.addMetric("meter", nameMeter);
+
+                byte[] body = payload.getBody();
+                String meterBody = new String(body);
+                s_logger.info("Published meterBody {}", meterBody);
 
                 // Publish the message
                 try {
-                    virtualGasMeter.getCloudClient().publish(topic, payload, qos, retain);
-                    s_logger.info("Published message to {} for {}", topic, nameMeter);
+                    virtualGasMeter.getCloudClient().publish(finalTopic, payload, qos, retain);
+                    s_logger.info("Published message to {} for {}", finalTopic, nameMeter);
                 } catch (Exception e) {
-                    s_logger.error("Cannot publish on topic {} for {}: {}", topic, nameMeter, e.getMessage(), e);
+                    s_logger.error("Cannot publish on topic {} for {}: {}", finalTopic, nameMeter, e.getMessage(), e);
                 }
 
             }
