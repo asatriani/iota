@@ -21,34 +21,42 @@ public class SendMeasureJob implements Job {
     }
 
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        Map<String, Object> m_properties = virtualGasMeter.getProperties();
+        synchronized (virtualGasMeter) {
+            Map<String, Object> m_properties = virtualGasMeter.getProperties();
 
-        // fetch the publishing configuration from the publishing properties
-        String topic = (String) m_properties.get(VirtualGasMeter.PUBLISH_TOPIC_PROP_NAME);
-        Integer qos = (Integer) m_properties.get(VirtualGasMeter.PUBLISH_QOS_PROP_NAME);
-        Boolean retain = (Boolean) m_properties.get(VirtualGasMeter.PUBLISH_RETAIN_PROP_NAME);
+            // fetch the publishing configuration from the publishing properties
+            String topic = (String) m_properties.get(VirtualGasMeter.PUBLISH_TOPIC_PROP_NAME);
+            Integer qos = (Integer) m_properties.get(VirtualGasMeter.PUBLISH_QOS_PROP_NAME);
+            Boolean retain = (Boolean) m_properties.get(VirtualGasMeter.PUBLISH_RETAIN_PROP_NAME);
 
-        double comsumption = virtualGasMeter.getRandom().nextDouble() * 4;
-        double m_measure = virtualGasMeter.getMeasure() + comsumption;
-        virtualGasMeter.setMeasure(m_measure);
+            Date currentDate = new Date();
+            int meterNumber = virtualGasMeter.getMeasures().size();
+            for (int i = 0; i < meterNumber; i++) {
+                String nameMeter = VirtualGasMeter.METER_PREFIX_NAME + i;
+                double comsumption = virtualGasMeter.getRandom().nextDouble() * 4;
+                double measure = virtualGasMeter.getMeasures().get(nameMeter) + comsumption;
+                virtualGasMeter.getMeasures().put(nameMeter, measure);
 
-        // Allocate a new payload
-        KuraPayload payload = new KuraPayload();
+                // Allocate a new payload
+                KuraPayload payload = new KuraPayload();
 
-        // Timestamp the message
-        payload.setTimestamp(new Date());
+                // Timestamp the message
+                payload.setTimestamp(currentDate);
 
-        // Add metric to the payload
-        payload.addMetric("value", m_measure);
+                // Add metric to the payload
+                payload.addMetric("value", measure);
+                payload.addMetric("meterID", nameMeter);
 
-        // Publish the message
-        try {
-            virtualGasMeter.getCloudClient().publish(topic, payload, qos, retain);
-            s_logger.info("Published to {} message: {}", topic, payload);
-        } catch (Exception e) {
-            s_logger.error("Cannot publish topic: " + topic, e);
+                // Publish the message
+                try {
+                    virtualGasMeter.getCloudClient().publish(topic, payload, qos, retain);
+                    s_logger.info("Published message to {} for {}", topic, nameMeter);
+                } catch (Exception e) {
+                    s_logger.error("Cannot publish on topic {} for {}: {}", topic, nameMeter, e.getMessage(), e);
+                }
+
+            }
         }
-
     }
 
 }

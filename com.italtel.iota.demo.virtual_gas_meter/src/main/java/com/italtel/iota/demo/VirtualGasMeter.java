@@ -11,6 +11,7 @@
  *******************************************************************************/
 package com.italtel.iota.demo;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
@@ -48,8 +49,11 @@ public class VirtualGasMeter implements ConfigurableComponent, CloudClientListen
     public static final String PUBLISH_TOPIC_PROP_NAME = "publish.semanticTopic";
     public static final String PUBLISH_QOS_PROP_NAME = "publish.qos";
     public static final String PUBLISH_RETAIN_PROP_NAME = "publish.retain";
+    public static final String METER_SIZE_PROP_NAME = "meter.size";
 
     public static final String INITIAL_MEASURE_PROP_NAME = "initial.measure";
+
+    public static final String METER_PREFIX_NAME = "Gas_Meter_";
 
     private CloudService m_cloudService;
     private CloudClient m_cloudClient;
@@ -61,14 +65,18 @@ public class VirtualGasMeter implements ConfigurableComponent, CloudClientListen
     private Random m_random;
 
     private JobDetail sendMeasureJob;
+    private Trigger trigger;
     private Scheduler scheduler;
 
-    private double m_measure;
+    private Map<String, Double> m_measures;
+
+    private int m_size;
 
     public VirtualGasMeter() {
         super();
-        this.m_random = new Random();
-        this.m_worker = Executors.newSingleThreadScheduledExecutor();
+        m_random = new Random();
+        m_worker = Executors.newSingleThreadScheduledExecutor();
+        m_measures = new HashMap<>();
     }
 
     public void setCloudService(CloudService cloudService) {
@@ -79,12 +87,8 @@ public class VirtualGasMeter implements ConfigurableComponent, CloudClientListen
         this.m_cloudService = null;
     }
 
-    public double getMeasure() {
-        return m_measure;
-    }
-
-    public void setMeasure(double m_measure) {
-        this.m_measure = m_measure;
+    public Map<String, Double> getMeasures() {
+        return m_measures;
     }
 
     public Random getRandom() {
@@ -207,36 +211,61 @@ public class VirtualGasMeter implements ConfigurableComponent, CloudClientListen
     }
 
     private void doUpdate(boolean onUpdate) {
-        // cancel a current worker handle if one if active
-        if (this.m_handle != null) {
-            this.m_handle.cancel(true);
-        }
-
-        if (!this.m_properties.containsKey(PUBLISH_CRON_EXPR_PROP_NAME)) {
-            s_logger.info("Update VirtualGasMeter - Ignore as properties do not contain PUBLISH_RATE_PROP_NAME.");
-            return;
-        }
-
-        if (!onUpdate) {
-            m_measure = (Double) this.m_properties.get(INITIAL_MEASURE_PROP_NAME);
-        } else {
-            try {
-                scheduler.clear();
-            } catch (SchedulerException e) {
-                s_logger.error("Error scheduler clearing", e);
-
+        synchronized (this) {
+            // cancel a current worker handle if one if active
+            if (this.m_handle != null) {
+                this.m_handle.cancel(true);
             }
-        }
 
-        String cronExpr = (String) this.m_properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
-        Trigger trigger = TriggerBuilder.newTrigger().withIdentity("trigger", "group")
-                .withSchedule(CronScheduleBuilder.cronSchedule(cronExpr)).build();
+            if (!this.m_properties.containsKey(PUBLISH_CRON_EXPR_PROP_NAME)) {
+                s_logger.info("Update VirtualGasMeter - Ignore as properties do not contain {}",
+                        VirtualGasMeter.PUBLISH_CRON_EXPR_PROP_NAME);
+                return;
+            }
 
-        // schedule a new worker based on the properties of the service
-        try {
-            scheduler.scheduleJob(sendMeasureJob, trigger);
-        } catch (SchedulerException e) {
-            s_logger.error("Error scheduling sender job", e);
+            if (!this.m_properties.containsKey(METER_SIZE_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeter - Ignore as properties do not contain {}",
+                        VirtualGasMeter.METER_SIZE_PROP_NAME);
+                return;
+            } else {
+                m_size = (int) this.m_properties.get(METER_SIZE_PROP_NAME);
+                if (m_size < 1) {
+                    s_logger.error("Invalid number of meter {}", VirtualGasMeter.METER_SIZE_PROP_NAME);
+                    return;
+                }
+            }
+
+            Double initialMeasure = (Double) this.m_properties.get(INITIAL_MEASURE_PROP_NAME);
+            if (m_size < m_measures.size()) {
+                for (int i = (m_measures.size() - 1); i >= m_size; i--) {
+                    m_measures.remove(METER_PREFIX_NAME + i);
+                }
+            } else {
+                for (int i = 0; i < m_size; i++) {
+                    if (!m_measures.containsKey(METER_PREFIX_NAME + i)) {
+                        m_measures.put(METER_PREFIX_NAME + i, initialMeasure);
+                    }
+                }
+            }
+
+            if (trigger != null) {
+                try {
+                    scheduler.unscheduleJob(trigger.getKey());
+                } catch (SchedulerException e) {
+                    s_logger.error("Error scheduling old sender job", e);
+                }
+            }
+
+            String cronExpr = (String) this.m_properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
+            trigger = TriggerBuilder.newTrigger().withIdentity("trigger", "group")
+                    .withSchedule(CronScheduleBuilder.cronSchedule(cronExpr)).build();
+
+            // schedule a new worker based on the properties of the service
+            try {
+                scheduler.scheduleJob(sendMeasureJob, trigger);
+            } catch (SchedulerException e) {
+                s_logger.error("Error scheduling sender job", e);
+            }
         }
 
     }

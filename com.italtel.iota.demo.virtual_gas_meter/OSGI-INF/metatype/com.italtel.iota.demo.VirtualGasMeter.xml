@@ -32,7 +32,7 @@
             type="String"
             cardinality="0" 
             required="true"
-            default="0 0/1 * 1/1 * ? *" 
+            default="0 0 0 1/1 * ? *" 
             description="Default cron expression to schedule sending measure."/>
 
         <AD id="publish.semanticTopic"  
@@ -62,6 +62,15 @@
             required="true"
             default="false" 
             description="Default retaing flag for the published messages."/>
+            
+         <AD id="meter.size"
+            name="meter.size"
+            type="Integer"
+            cardinality="0" 
+            required="true"
+            default="1" 
+            description="amount of meters."/>
+          
     </OCD>
     
     <Designate pid="com.italtel.iota.demo.VirtualGasMeter">
