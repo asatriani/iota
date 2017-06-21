@@ -19,6 +19,14 @@
         
         <Icon resource="OSGI-INF/virtual_gas_meter_gateway.png" size="32"/>
 
+        <AD id="meter.size"
+            name="meter.size"
+            type="Integer"
+            cardinality="0" 
+            required="true"
+            default="1" 
+            description="amount of meters."/>
+
         <AD id="initial.measure"  
             name="initial.measure"
             type="Double"
@@ -26,7 +34,23 @@
             required="true"
             default="450"
             description="Initial value for the measure metric."/>
+            
+         <AD id="initial.battery.level"
+            name="initial.battery.level"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="100" 
+            description="Initial battery level percent."/>
 
+        <AD id="ref.location"  
+            name="ref.location"
+            type="String"
+            cardinality="0" 
+            required="true"
+            default="46.474979 9.034319" 
+            description="Reference location latitude,longitude"/>
+          
         <AD id="publish.cron.expr"  
             name="publish.cron.expr"
             type="String"
@@ -63,14 +87,6 @@
             default="false" 
             description="Default retaing flag for the published messages."/>
             
-         <AD id="meter.size"
-            name="meter.size"
-            type="Integer"
-            cardinality="0" 
-            required="true"
-            default="1" 
-            description="amount of meters."/>
-          
     </OCD>
     
     <Designate pid="com.italtel.iota.demo.VirtualGasMeterGateway">

@@ -20,7 +20,6 @@ public class SendMeasureJob implements Job {
     private Random m_random;
 
     public SendMeasureJob() {
-
         m_random = new Random();
     }
 
@@ -47,11 +46,16 @@ public class SendMeasureJob implements Job {
                 double measure = meter.getMeasure() + comsumption;
                 meter.setMeasure(measure);
 
-                String finalTopic = new StringBuilder(meterName).append("/").append(topic).toString();
+                double batteryComsumption = m_random.nextDouble() * 0.01;
+                double batteryLevel = meter.getBatteryLevel() - batteryComsumption;
+                meter.setBatteryLevel(batteryLevel);
 
                 String content = new StringBuilder("{").append("\"timestamp\": ").append(currentTimestamp)
-                        .append(", \"meter\": \"").append(meterName).append("\", \"measure\": ").append(measure)
-                        .append("}").toString();
+                        .append(", \"meter\": \"").append(meterName).append(", \"geohash\": \"")
+                        .append(meter.getGeohash()).append("\", \"measure\": ").append(measure)
+                        .append("\", \"battery\": ").append(batteryLevel).append("}").toString();
+
+                String finalTopic = new StringBuilder(meterName).append("/").append(topic).toString();
 
                 // Publish the message
                 try {

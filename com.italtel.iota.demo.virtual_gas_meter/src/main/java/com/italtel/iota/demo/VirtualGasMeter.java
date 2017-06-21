@@ -6,18 +6,17 @@ public class VirtualGasMeter {
 
     private String name;
     private double measure;
-    private double battery_level;
+    private double batteryLevel;
     private String geohash;
-    private List<String> alerting_message;
+    private List<String> alertingMessage;
 
-    public VirtualGasMeter(String name, double measure, double battery_level, String geohash,
-            List<String> alerting_message) {
-
+    public VirtualGasMeter(String name, double measure, double batteryLevel, String geohash,
+            List<String> alertingMessage) {
         this.name = name;
         this.measure = measure;
-        this.battery_level = battery_level;
+        this.batteryLevel = batteryLevel;
         this.geohash = geohash;
-        this.alerting_message = alerting_message;
+        this.alertingMessage = alertingMessage;
     }
 
     public String getName() {
@@ -36,12 +35,12 @@ public class VirtualGasMeter {
         this.measure = measure;
     }
 
-    public double getBattery_level() {
-        return battery_level;
+    public double getBatteryLevel() {
+        return batteryLevel;
     }
 
-    public void setBattery_level(double battery_level) {
-        this.battery_level = battery_level;
+    public void setBatteryLevel(double batteryLevel) {
+        this.batteryLevel = batteryLevel;
     }
 
     public String getGeohash() {
@@ -52,18 +51,18 @@ public class VirtualGasMeter {
         this.geohash = geohash;
     }
 
-    public List<String> getAlerting_message() {
-        return alerting_message;
+    public List<String> getAlertingMessage() {
+        return alertingMessage;
     }
 
-    public void setAlerting_message(List<String> alerting_message) {
-        this.alerting_message = alerting_message;
+    public void setAlertingMessage(List<String> alertingMessage) {
+        this.alertingMessage = alertingMessage;
     }
 
     @Override
     public String toString() {
-        return "VirtualGasMeter [name=" + name + ", measure=" + measure + ", battery_level=" + battery_level
-                + ", geohash=" + geohash + ", alerting_message=" + alerting_message + "]";
+        return "VirtualGasMeter [name=" + name + ", measure=" + measure + ", batteryLevel=" + batteryLevel
+                + ", geohash=" + geohash + ", alertingMessage=" + alertingMessage + "]";
     }
 
 }

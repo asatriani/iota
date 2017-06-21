@@ -13,6 +13,7 @@ package com.italtel.iota.demo;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -36,6 +37,8 @@ import org.quartz.impl.StdSchedulerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ch.hsr.geohash.GeoHash;
+
 public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClientListener {
 
     private static final Logger s_logger = LoggerFactory.getLogger(VirtualGasMeterGateway.class);
@@ -56,10 +59,10 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     public static final String INITIAL_MEASURE_PROP_NAME = "initial.measure";
     public static final String MAX_CONSUMPTION_PROP_NAME = "max.consumption";
 
-    public static final String INITIAL_BATTERY_LEVEL_PERCENT_PROP_NAME = "initial.battery.level.percent";
+    public static final String INITIAL_BATTERY_LEVEL_PROP_NAME = "initial.battery.level";
     public static final String MAX_BATTERY_LEVEL_CONSUMPTION_PROP_NAME = "max.battery.level.consumption";
 
-    public static final String REFERENCE_LOCATION_PROP_NAME = "reference.location";
+    public static final String REFERENCE_LOCATION_PROP_NAME = "ref.location";
 
     public static final String ALERTING_MESSAGES_PROP_NAME = "alerting.messages";
 
@@ -76,8 +79,6 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     private Scheduler scheduler;
 
     private Map<String, VirtualGasMeter> meters;
-
-    private int m_size;
 
     public VirtualGasMeterGateway() {
         super();
@@ -220,12 +221,14 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                 this.m_handle.cancel(true);
             }
 
-            if (!this.m_properties.containsKey(PUBLISH_CRON_EXPR_PROP_NAME)) {
-                s_logger.info("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+            String cronExpr = (String) this.m_properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
+            if (cronExpr == null) {
+                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
                         VirtualGasMeterGateway.PUBLISH_CRON_EXPR_PROP_NAME);
                 return;
             }
 
+            int m_size;
             if (!this.m_properties.containsKey(METER_SIZE_PROP_NAME)) {
                 s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
                         VirtualGasMeterGateway.METER_SIZE_PROP_NAME);
@@ -233,21 +236,82 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
             } else {
                 m_size = (int) this.m_properties.get(METER_SIZE_PROP_NAME);
                 if (m_size < 1) {
-                    s_logger.error("Invalid number of meter {}", VirtualGasMeterGateway.METER_SIZE_PROP_NAME);
+                    s_logger.error("Invalid {}. Must be equal or greater than 1",
+                            VirtualGasMeterGateway.METER_SIZE_PROP_NAME);
                     return;
                 }
             }
 
-            Double initialMeasure = (Double) this.m_properties.get(INITIAL_MEASURE_PROP_NAME);
+            Double initialMeasure;
+            if (!this.m_properties.containsKey(INITIAL_MEASURE_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+                        VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
+                return;
+            } else {
+                initialMeasure = (Double) this.m_properties.get(INITIAL_MEASURE_PROP_NAME);
+                if (initialMeasure < 0) {
+                    s_logger.error("Invalid {}. Must be positive", VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
+                    return;
+                }
+            }
+
+            Double initialBatteryLevel;
+            if (!this.m_properties.containsKey(INITIAL_BATTERY_LEVEL_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+                        VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
+                return;
+            } else {
+                initialBatteryLevel = (Double) this.m_properties.get(INITIAL_BATTERY_LEVEL_PROP_NAME);
+                if (initialBatteryLevel < 0) {
+                    s_logger.error("Invalid {}. Must be positive",
+                            VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
+                    return;
+                }
+            }
+
+            float lat;
+            float lon;
+            String refLocation = (String) this.m_properties.get(REFERENCE_LOCATION_PROP_NAME);
+            if (refLocation == null) {
+                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+                        VirtualGasMeterGateway.REFERENCE_LOCATION_PROP_NAME);
+                return;
+            } else {
+                String[] locData = refLocation.split(" ");
+                if (locData.length != 2) {
+                    s_logger.error("Update VirtualGasMeterGateway - Invalid {}",
+                            VirtualGasMeterGateway.REFERENCE_LOCATION_PROP_NAME);
+                    return;
+                }
+
+                try {
+                    lat = Float.parseFloat(locData[0]);
+                } catch (Exception e) {
+                    s_logger.error("Update VirtualGasMeterGateway - Invalid latitude {}", locData[0]);
+                    return;
+                }
+                try {
+                    lon = Float.parseFloat(locData[1]);
+                } catch (Exception e) {
+                    s_logger.error("Update VirtualGasMeterGateway - Invalid longitude {}", locData[1]);
+                    return;
+                }
+            }
+
             if (m_size < meters.size()) {
                 for (int i = (meters.size() - 1); i >= m_size; i--) {
                     meters.remove(METER_PREFIX_NAME + i);
                 }
             } else {
+                Random m_random = new Random();
                 for (int i = 0; i < m_size; i++) {
                     if (!meters.containsKey(METER_PREFIX_NAME + i)) {
-                        meters.put(METER_PREFIX_NAME + i,
-                                new VirtualGasMeter(METER_PREFIX_NAME + i, initialMeasure, 0, null, null));
+                        // increment lat and lon
+                        float rLat = lat + (float) ((m_random.nextFloat() * 0.03) * (m_random.nextBoolean() ? 1 : -1));
+                        float rLon = lon + (float) ((m_random.nextFloat() * 0.06) * (m_random.nextBoolean() ? 1 : -1));
+                        String geohash = GeoHash.withCharacterPrecision(rLat, rLon, 9).toBase32();
+                        meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, initialMeasure,
+                                initialBatteryLevel, geohash, null));
                     }
                 }
             }
@@ -260,7 +324,6 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                 }
             }
 
-            String cronExpr = (String) this.m_properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
             trigger = TriggerBuilder.newTrigger().withIdentity("trigger", "group")
                     .withSchedule(CronScheduleBuilder.cronSchedule(cronExpr)).build();
 
