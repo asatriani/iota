@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: com.italtel.iota.demo.virtual_gas_meter
-Bundle-SymbolicName: com.italtel.iota.demo.virtual_gas_meter;singleton:=true
+Bundle-Name: com.italtel.iota.demo.virtual_gas_meter_gateway
+Bundle-SymbolicName: com.italtel.iota.demo.virtual_gas_meter_gateway;singleton:=true
 Bundle-Version: 1.0.100
 Bundle-Vendor: Italtel
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8

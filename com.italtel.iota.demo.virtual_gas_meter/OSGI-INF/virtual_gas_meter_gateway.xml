@@ -14,21 +14,21 @@
 
 -->
 <scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0" 
-    name="com.italtel.iota.demo.VirtualGasMeter"
+    name="com.italtel.iota.demo.VirtualGasMeterGateway"
     activate="activate" 
     deactivate="deactivate" 
     modified="updated" 
     enabled="true"
     immediate="true"
     configuration-policy="require">
-	<implementation class="com.italtel.iota.demo.VirtualGasMeter"/>
+	<implementation class="com.italtel.iota.demo.VirtualGasMeterGateway"/>
 
    <!-- If the component is configurable through the Kura ConfigurationService, it must expose a Service. -->
-   <property name="service.pid" type="String" value="com.italtel.iota.demo.VirtualGasMeterer"/>
+   <property name="service.pid" type="String" value="com.italtel.iota.demo.VirtualGasMeterGateway"/>
    <service>
        <provide interface="org.eclipse.kura.configuration.ConfigurableComponent"/>
    </service>
-   
+  
    <reference name="CloudService"
               policy="static"
               bind="setCloudService"       

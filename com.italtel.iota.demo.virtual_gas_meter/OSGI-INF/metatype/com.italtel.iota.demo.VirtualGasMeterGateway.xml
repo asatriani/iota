@@ -13,11 +13,11 @@
 
 -->
 <MetaData xmlns="http://www.osgi.org/xmlns/metatype/v1.2.0" localization="en_us">
-    <OCD id="com.italtel.iota.demo.VirtualGasMeter"
-         name="VirtualGasMeter" 
+    <OCD id="com.italtel.iota.demo.VirtualGasMeterGateway"
+         name="VirtualGasMeterGateway" 
          description="This is a simulator for an heater gateway application. Its configuration options will be passed down the smart heater. ">
         
-        <Icon resource="OSGI-INF/virtual_gas_meter.png" size="32"/>
+        <Icon resource="OSGI-INF/virtual_gas_meter_gateway.png" size="32"/>
 
         <AD id="initial.measure"  
             name="initial.measure"
@@ -73,7 +73,7 @@
           
     </OCD>
     
-    <Designate pid="com.italtel.iota.demo.VirtualGasMeter">
-        <Object ocdref="com.italtel.iota.demo.VirtualGasMeter"/>
+    <Designate pid="com.italtel.iota.demo.VirtualGasMeterGateway">
+        <Object ocdref="com.italtel.iota.demo.VirtualGasMeterGateway"/>
     </Designate>
 </MetaData>

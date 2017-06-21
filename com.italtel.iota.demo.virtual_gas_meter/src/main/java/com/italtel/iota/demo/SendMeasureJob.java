@@ -2,6 +2,8 @@ package com.italtel.iota.demo;
 
 import java.util.Date;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Random;
 
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
@@ -13,28 +15,37 @@ public class SendMeasureJob implements Job {
 
     public static final Logger s_logger = LoggerFactory.getLogger(SendMeasureJob.class);
 
-    private VirtualGasMeter virtualGasMeter;
+    private VirtualGasMeterGateway virtualGasMeterGateway;
 
-    public void setVirtualGasMeter(VirtualGasMeter virtualGasMeter) {
-        this.virtualGasMeter = virtualGasMeter;
+    private Random m_random;
+
+    public SendMeasureJob() {
+
+        m_random = new Random();
+    }
+
+    public void setVirtualGasMeterGateway(VirtualGasMeterGateway virtualGasMeterGateway) {
+        this.virtualGasMeterGateway = virtualGasMeterGateway;
     }
 
     public void execute(JobExecutionContext context) throws JobExecutionException {
-        synchronized (virtualGasMeter) {
-            Map<String, Object> m_properties = virtualGasMeter.getProperties();
+        synchronized (virtualGasMeterGateway) {
+            Map<String, Object> m_properties = virtualGasMeterGateway.getProperties();
 
             // fetch the publishing configuration from the publishing properties
-            String topic = (String) m_properties.get(VirtualGasMeter.PUBLISH_TOPIC_PROP_NAME);
-            Integer qos = (Integer) m_properties.get(VirtualGasMeter.PUBLISH_QOS_PROP_NAME);
-            Boolean retain = (Boolean) m_properties.get(VirtualGasMeter.PUBLISH_RETAIN_PROP_NAME);
+            String topic = (String) m_properties.get(VirtualGasMeterGateway.PUBLISH_TOPIC_PROP_NAME);
+            Integer qos = (Integer) m_properties.get(VirtualGasMeterGateway.PUBLISH_QOS_PROP_NAME);
+            Boolean retain = (Boolean) m_properties.get(VirtualGasMeterGateway.PUBLISH_RETAIN_PROP_NAME);
 
             Long currentTimestamp = new Date().getTime();
-            int meterSize = virtualGasMeter.getMeasures().size();
-            for (int i = 0; i < meterSize; i++) {
-                String meterName = VirtualGasMeter.METER_PREFIX_NAME + i;
-                double comsumption = virtualGasMeter.getRandom().nextDouble() * 4;
-                double measure = virtualGasMeter.getMeasures().get(meterName) + comsumption;
-                virtualGasMeter.getMeasures().put(meterName, measure);
+
+            for (Entry<String, VirtualGasMeter> entry : virtualGasMeterGateway.getMeters().entrySet()) {
+                String meterName = entry.getKey();
+                VirtualGasMeter meter = entry.getValue();
+
+                double comsumption = m_random.nextDouble() * 4;
+                double measure = meter.getMeasure() + comsumption;
+                meter.setMeasure(measure);
 
                 String finalTopic = new StringBuilder(meterName).append("/").append(topic).toString();
 
@@ -44,13 +55,14 @@ public class SendMeasureJob implements Job {
 
                 // Publish the message
                 try {
-                    virtualGasMeter.getCloudClient().publish(finalTopic, content.getBytes(), qos, retain, 5);
+                    virtualGasMeterGateway.getCloudClient().publish(finalTopic, content.getBytes(), qos, retain, 5);
                     s_logger.info("Published message to {} for {}", finalTopic, meterName);
                 } catch (Exception e) {
                     s_logger.error("Cannot publish on topic {} for {}: {}", finalTopic, meterName, e.getMessage(), e);
                 }
 
             }
+
         }
     }
 
