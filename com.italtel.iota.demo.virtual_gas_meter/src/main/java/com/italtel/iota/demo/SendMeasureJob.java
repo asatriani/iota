@@ -29,8 +29,8 @@ public class SendMeasureJob implements Job {
             Boolean retain = (Boolean) m_properties.get(VirtualGasMeter.PUBLISH_RETAIN_PROP_NAME);
 
             Long currentTimestamp = new Date().getTime();
-            int meterNumber = virtualGasMeter.getMeasures().size();
-            for (int i = 0; i < meterNumber; i++) {
+            int meterSize = virtualGasMeter.getMeasures().size();
+            for (int i = 0; i < meterSize; i++) {
                 String meterName = VirtualGasMeter.METER_PREFIX_NAME + i;
                 double comsumption = virtualGasMeter.getRandom().nextDouble() * 4;
                 double measure = virtualGasMeter.getMeasures().get(meterName) + comsumption;

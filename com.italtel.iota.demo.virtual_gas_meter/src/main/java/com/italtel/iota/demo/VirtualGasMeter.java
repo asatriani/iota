@@ -44,16 +44,25 @@ public class VirtualGasMeter implements ConfigurableComponent, CloudClientListen
     // Cloud Application identifier
     private static final String APP_ID = "VirtualGasMeter";
 
+    public static final String METER_PREFIX_NAME = "Gas_Meter_";
+
     // Publishing Property Names
     public static final String PUBLISH_CRON_EXPR_PROP_NAME = "publish.cron.expr";
     public static final String PUBLISH_TOPIC_PROP_NAME = "publish.semanticTopic";
     public static final String PUBLISH_QOS_PROP_NAME = "publish.qos";
     public static final String PUBLISH_RETAIN_PROP_NAME = "publish.retain";
+
     public static final String METER_SIZE_PROP_NAME = "meter.size";
 
     public static final String INITIAL_MEASURE_PROP_NAME = "initial.measure";
+    public static final String MAX_CONSUMPTION_PROP_NAME = "max.consumption";
 
-    public static final String METER_PREFIX_NAME = "Gas_Meter_";
+    public static final String INITIAL_BATTERY_LEVEL_PERCENT_PROP_NAME = "initial.battery.level.percent";
+    public static final String MAX_BATTERY_LEVEL_CONSUMPTION_PROP_NAME = "max.battery.level.consumption";
+
+    public static final String REFERENCE_LOCATION_PROP_NAME = "reference.location";
+
+    public static final String ALERTING_MESSAGES_PROP_NAME = "alerting.messages";
 
     private CloudService m_cloudService;
     private CloudClient m_cloudClient;
