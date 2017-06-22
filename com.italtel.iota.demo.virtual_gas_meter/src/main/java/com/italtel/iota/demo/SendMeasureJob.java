@@ -1,6 +1,8 @@
 package com.italtel.iota.demo;
 
 import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
@@ -50,10 +52,23 @@ public class SendMeasureJob implements Job {
                 double batteryLevel = meter.getBatteryLevel() - batteryComsumption;
                 meter.setBatteryLevel(batteryLevel);
 
-                String content = new StringBuilder("{").append("\"timestamp\": ").append(currentTimestamp)
-                        .append(", \"meter\": \"").append(meterName).append(", \"geohash\": \"")
+                StringBuilder b = new StringBuilder("{").append("\"timestamp\": ").append(currentTimestamp)
+                        .append(", \"meter\": \"").append(meterName).append("\", \"geohash\": \"")
                         .append(meter.getGeohash()).append("\", \"measure\": ").append(measure)
-                        .append("\", \"battery\": ").append(batteryLevel).append("}").toString();
+                        .append(", \"battery\": ").append(batteryLevel);
+                List<String> alertingMessages = meter.getAlertingMessages();
+                if (alertingMessages != null && !alertingMessages.isEmpty()) {
+                    b.append(", \"alertingMessages\": [");
+                    for (Iterator<String> iterator = alertingMessages.iterator(); iterator.hasNext();) {
+                        b.append("\"").append(iterator.next()).append("\"");
+                        if (iterator.hasNext()) {
+                            b.append(", ");
+                        }
+                    }
+                    b.append("]");
+                }
+                b.append("}");
+                String content = b.toString();
 
                 String finalTopic = new StringBuilder(meterName).append("/").append(topic).toString();
 

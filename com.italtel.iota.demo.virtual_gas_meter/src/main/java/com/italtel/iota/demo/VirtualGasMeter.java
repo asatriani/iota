@@ -8,15 +8,15 @@ public class VirtualGasMeter {
     private double measure;
     private double batteryLevel;
     private String geohash;
-    private List<String> alertingMessage;
+    private List<String> alertingMessages;
 
     public VirtualGasMeter(String name, double measure, double batteryLevel, String geohash,
-            List<String> alertingMessage) {
+            List<String> alertingMessages) {
         this.name = name;
         this.measure = measure;
         this.batteryLevel = batteryLevel;
         this.geohash = geohash;
-        this.alertingMessage = alertingMessage;
+        this.alertingMessages = alertingMessages;
     }
 
     public String getName() {
@@ -51,18 +51,18 @@ public class VirtualGasMeter {
         this.geohash = geohash;
     }
 
-    public List<String> getAlertingMessage() {
-        return alertingMessage;
+    public List<String> getAlertingMessages() {
+        return alertingMessages;
     }
 
-    public void setAlertingMessage(List<String> alertingMessage) {
-        this.alertingMessage = alertingMessage;
+    public void setAlertingMessages(List<String> alertingMessages) {
+        this.alertingMessages = alertingMessages;
     }
 
     @Override
     public String toString() {
         return "VirtualGasMeter [name=" + name + ", measure=" + measure + ", batteryLevel=" + batteryLevel
-                + ", geohash=" + geohash + ", alertingMessage=" + alertingMessage + "]";
+                + ", geohash=" + geohash + ", alertingMessages=" + alertingMessages + "]";
     }
 
 }
