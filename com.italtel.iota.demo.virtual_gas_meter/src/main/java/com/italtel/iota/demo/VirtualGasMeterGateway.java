@@ -11,12 +11,16 @@
  *******************************************************************************/
 package com.italtel.iota.demo;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.kura.cloud.CloudClient;
 import org.eclipse.kura.cloud.CloudClientListener;
@@ -65,6 +69,9 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     public static final String REFERENCE_LOCATION_PROP_NAME = "ref.location";
 
     public static final String ALERTING_MESSAGES_PROP_NAME = "alerting.messages";
+
+    public static final String[] alertingMessages = new String[] { "Hardware fault detected", "Gas leak detected",
+            "Tampering detected" };
 
     private CloudService m_cloudService;
     private CloudClient m_cloudClient;
@@ -304,15 +311,60 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                 }
             } else {
                 Random m_random = new Random();
+                float rLat, rLon;
+
+                VirtualGasMeter meter;
                 for (int i = 0; i < m_size; i++) {
-                    if (!meters.containsKey(METER_PREFIX_NAME + i)) {
+                    meter = meters.get(METER_PREFIX_NAME + i);
+                    if (meter == null) {
                         // increment lat and lon
-                        float rLat = lat + (float) ((m_random.nextFloat() * 0.03) * (m_random.nextBoolean() ? 1 : -1));
-                        float rLon = lon + (float) ((m_random.nextFloat() * 0.06) * (m_random.nextBoolean() ? 1 : -1));
+                        rLat = lat + (float) ((m_random.nextFloat() * 0.03) * (m_random.nextBoolean() ? 1 : -1));
+                        rLon = lon + (float) ((m_random.nextFloat() * 0.06) * (m_random.nextBoolean() ? 1 : -1));
                         String geohash = GeoHash.withCharacterPrecision(rLat, rLon, 9).toBase32();
                         meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, initialMeasure,
                                 initialBatteryLevel, geohash, null));
+                    } else {
+                        // Clear old meter alerting messages
+                        meter.setAlertingMessages(null);
                     }
+                }
+
+            }
+
+            String alertProp = (String) this.m_properties.get(ALERTING_MESSAGES_PROP_NAME);
+            if (alertProp != null && alertProp.trim().length() > 0) {
+                Pattern alertPattern = Pattern.compile("(\\d+)\\[([\\d ]+)\\]");
+                String[] s = alertProp.split("\\|");
+                for (String part : s) {
+                    Matcher m = alertPattern.matcher(part);
+                    if (!m.matches()) {
+                        s_logger.error("Alerting config string '{}' is not valid because it must match regex: {}", part,
+                                alertPattern.pattern());
+                        continue;
+                    }
+
+                    String meterName = METER_PREFIX_NAME + m.group(1);
+                    VirtualGasMeter vgm = meters.get(meterName);
+                    if (vgm == null) {
+                        s_logger.error(
+                                "Alerting config string '{}' is not valid because it refences an invald virtual gas meter index: {}",
+                                part, m.group(1));
+                        continue;
+                    }
+                    List<String> messages = new ArrayList<>();
+                    String[] alert = m.group(2).split(" ");
+                    for (String a : alert) {
+                        int alertIndex = Integer.parseInt(a);
+                        if (alertIndex > alertingMessages.length - 1) {
+                            s_logger.error(
+                                    "Alerting config string '{}' is not valid because it refences an invald alerting message index: {}",
+                                    part, a);
+                            continue;
+                        }
+                        messages.add(alertingMessages[alertIndex]);
+                    }
+
+                    vgm.setAlertingMessages(messages);
                 }
             }
 
