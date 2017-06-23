@@ -11,11 +11,11 @@
  *******************************************************************************/
 package com.italtel.iota.demo;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -55,6 +55,7 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     // Publishing Property Names
     public static final String PUBLISH_CRON_EXPR_PROP_NAME = "publish.cron.expr";
     public static final String PUBLISH_TOPIC_PROP_NAME = "publish.semanticTopic";
+    public static final String PUBLISH_ALERT_TOPIC_PROP_NAME = "publish.alert.semanticTopic";
     public static final String PUBLISH_QOS_PROP_NAME = "publish.qos";
     public static final String PUBLISH_RETAIN_PROP_NAME = "publish.retain";
 
@@ -92,6 +93,7 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
 
         m_worker = Executors.newSingleThreadScheduledExecutor();
         meters = new HashMap<>();
+
     }
 
     public void setCloudService(CloudService cloudService) {
@@ -322,7 +324,7 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                         rLon = lon + (float) ((m_random.nextFloat() * 0.06) * (m_random.nextBoolean() ? 1 : -1));
                         String geohash = GeoHash.withCharacterPrecision(rLat, rLon, 9).toBase32();
                         meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, initialMeasure,
-                                initialBatteryLevel, geohash, null));
+                                initialBatteryLevel, geohash, null, this));
                     } else {
                         // Clear old meter alerting messages
                         meter.setAlertingMessages(null);
@@ -351,7 +353,8 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                                 part, m.group(1));
                         continue;
                     }
-                    List<String> messages = new ArrayList<>();
+
+                    Set<String> messages = new HashSet<>();
                     String[] alert = m.group(2).split(" ");
                     for (String a : alert) {
                         int alertIndex = Integer.parseInt(a);
@@ -363,7 +366,6 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                         }
                         messages.add(alertingMessages[alertIndex]);
                     }
-
                     vgm.setAlertingMessages(messages);
                 }
             }

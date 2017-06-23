@@ -1,21 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-
-    Copyright (c) 2011, 2016 Eurotech and/or its affiliates
-
-     All rights reserved. This program and the accompanying materials
-     are made available under the terms of the Eclipse Public License v1.0
-     which accompanies this distribution, and is available at
-     http://www.eclipse.org/legal/epl-v10.html
-
-    Contributors:
-      Eurotech
-
--->
 <MetaData xmlns="http://www.osgi.org/xmlns/metatype/v1.2.0" localization="en_us">
     <OCD id="com.italtel.iota.demo.VirtualGasMeterGateway"
          name="VirtualGasMeterGateway" 
-         description="This is a simulator for an heater gateway application. Its configuration options will be passed down the smart heater. ">
+         description="This is a simulator for an gas meter gateway application. ">
         
         <Icon resource="OSGI-INF/virtual_gas_meter_gateway.png" size="32"/>
 
@@ -35,6 +22,14 @@
             default="450"
             description="Initial value for the measure metric."/>
             
+         <AD id="max.consumption"
+            name="max.consumption"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="4" 
+            description="Increment of consumption"/>
+
          <AD id="initial.battery.level"
             name="initial.battery.level"
             type="Double"
@@ -42,6 +37,14 @@
             required="true"
             default="100" 
             description="Initial battery level percent."/>
+                
+         <AD id="max.battery.level.consumption"
+            name="max.battery.level.consumption"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="0.01" 
+            description="Decrement of level of battery"/>
 
         <AD id="ref.location"  
             name="ref.location"
@@ -65,7 +68,7 @@
             cardinality="0" 
             required="false"
             default="" 
-            description="Meter alerting messages: meter_index[message_code ...]|... Possible messages are: 0,1,2"/>
+            description="Meter alerting messages: meter_index[message_code_indexes ...]|... Possible message_code_indexes are: 0,1,2"/>
             
         <AD id="publish.semanticTopic"  
             name="publish.semanticTopic"
