@@ -70,6 +70,7 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     public static final String REFERENCE_LOCATION_PROP_NAME = "ref.location";
 
     public static final String ALERTING_MESSAGES_PROP_NAME = "alerting.messages";
+    public static final String ALERTING_MESSAGES_AS_ARRAY_PROP_NAME = "alerting.messages.as.array";
 
     public static final String[] alertingMessages = new String[] { "Hardware fault detected", "Gas leak detected",
             "Tampering detected" };

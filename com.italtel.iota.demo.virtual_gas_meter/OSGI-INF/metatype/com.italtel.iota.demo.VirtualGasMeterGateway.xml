@@ -69,7 +69,15 @@
             required="false"
             default="" 
             description="Meter alerting messages: meter_index[message_code_indexes ...]|... Possible message_code_indexes are: 0,1,2"/>
-            
+
+        <AD id="alerting.messages.as.array"  
+            name="alerting.messages.as.array"
+            type="Boolean"
+            cardinality="0" 
+            required="true"
+            default="false" 
+            description="Default flag to publish alerting messages in a string array or single string."/>
+
         <AD id="publish.semanticTopic"  
             name="publish.semanticTopic"
             type="String"

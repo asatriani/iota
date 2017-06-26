@@ -74,28 +74,32 @@ public class VirtualGasMeter {
         Map<String, Object> m_properties = virtualGasMeterGateway.getProperties();
 
         // fetch the publishing configuration from the publishing properties
+        Boolean alertMsgAsArray = (Boolean) m_properties
+                .get(VirtualGasMeterGateway.ALERTING_MESSAGES_AS_ARRAY_PROP_NAME);
         String topic = (String) m_properties.get(VirtualGasMeterGateway.PUBLISH_ALERT_TOPIC_PROP_NAME);
         Integer qos = (Integer) m_properties.get(VirtualGasMeterGateway.PUBLISH_QOS_PROP_NAME);
         Boolean retain = (Boolean) m_properties.get(VirtualGasMeterGateway.PUBLISH_RETAIN_PROP_NAME);
 
         StringBuilder b = new StringBuilder("{").append("\"timestamp\": ").append(new Date().getTime())
-                .append(", \"meter\": \"").append(name).append("\", alertingMessages\": [");
+                .append(", \"meter\": \"").append(name).append("\", \"alertingCount\": ")
+                .append(alertingMessages != null ? alertingMessages.size() : 0).append(", \"alertingMessages\": ");
+        b.append(alertMsgAsArray ? "[" : "\"");
         if (alertingMessages != null && !alertingMessages.isEmpty()) {
             for (Iterator<String> iterator = alertingMessages.iterator(); iterator.hasNext();) {
-                b.append("\"").append(iterator.next()).append("\"");
+                b.append(alertMsgAsArray ? "\"" : "").append(iterator.next()).append(alertMsgAsArray ? "\"" : "");
                 if (iterator.hasNext()) {
                     b.append(", ");
                 }
             }
         }
-        b.append("]}");
-        String content = b.toString();
+        b.append(alertMsgAsArray ? "]" : "\"");
+        b.append(" }");
 
         String destTopic = new StringBuilder(name).append("/").append(topic).toString();
 
         // Publish the message
         try {
-            virtualGasMeterGateway.getCloudClient().publish(destTopic, content.getBytes(), qos, retain, 5);
+            virtualGasMeterGateway.getCloudClient().publish(destTopic, b.toString().getBytes(), qos, retain, 5);
             s_logger.info("Published message to {} for {}", destTopic, name);
         } catch (Exception e) {
             s_logger.error("Cannot publish on topic {} for {}: {}", destTopic, name, e.getMessage(), e);
