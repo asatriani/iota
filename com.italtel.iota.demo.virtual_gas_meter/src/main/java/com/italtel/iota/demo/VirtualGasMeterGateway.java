@@ -16,9 +16,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -78,11 +75,8 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     private CloudService m_cloudService;
     private CloudClient m_cloudClient;
 
-    private ScheduledExecutorService m_worker;
-    private ScheduledFuture<?> m_handle;
-
     private Map<String, Object> m_properties;
-
+    private Random m_random;
     private JobDetail sendMeasureJob;
     private Trigger trigger;
     private Scheduler scheduler;
@@ -91,10 +85,8 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
 
     public VirtualGasMeterGateway() {
         super();
-
-        m_worker = Executors.newSingleThreadScheduledExecutor();
+        m_random = new Random();
         meters = new HashMap<>();
-
     }
 
     public void setCloudService(CloudService cloudService) {
@@ -113,10 +105,14 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
         return m_properties;
     }
 
+    public Random getRandom() {
+        return m_random;
+    }
+
     public CloudClient getCloudClient() {
         return m_cloudClient;
     }
-    // 0 0 0/1 1/1 * ? *
+
     // ----------------------------------------------------------------
     //
     // Activation APIs
@@ -159,8 +155,6 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
 
     protected void deactivate(ComponentContext componentContext) {
         s_logger.debug("Deactivating VirtualGasMeterGateway...");
-
-        this.m_worker.shutdown();
 
         s_logger.info("Releasing Cloud Client for {}...", APP_ID);
         this.m_cloudClient.release();
@@ -226,11 +220,6 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
 
     private void doUpdate(boolean onUpdate) {
         synchronized (this) {
-            // cancel a current worker handle if one if active
-            if (this.m_handle != null) {
-                this.m_handle.cancel(true);
-            }
-
             String cronExpr = (String) this.m_properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
             if (cronExpr == null) {
                 s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
@@ -313,7 +302,6 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                     meters.remove(METER_PREFIX_NAME + i);
                 }
             } else {
-                Random m_random = new Random();
                 float rLat, rLon;
 
                 VirtualGasMeter meter;
