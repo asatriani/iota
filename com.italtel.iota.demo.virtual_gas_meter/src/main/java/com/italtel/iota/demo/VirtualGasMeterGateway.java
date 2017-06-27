@@ -312,8 +312,7 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                         rLat = lat + (float) ((m_random.nextFloat() * 0.03) * (m_random.nextBoolean() ? 1 : -1));
                         rLon = lon + (float) ((m_random.nextFloat() * 0.06) * (m_random.nextBoolean() ? 1 : -1));
                         String geohash = GeoHash.withCharacterPrecision(rLat, rLon, 9).toBase32();
-                        meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, initialMeasure,
-                                initialBatteryLevel, geohash, null, this));
+                        meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, geohash, this));
                     } else {
                         // Clear old meter alerting messages
                         meter.setAlertingMessages(null);
