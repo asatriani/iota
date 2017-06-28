@@ -1,6 +1,7 @@
 package com.italtel.iota.demo;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
@@ -13,12 +14,15 @@ public class VirtualGasMeter {
 
     private static final Logger s_logger = LoggerFactory.getLogger(VirtualGasMeter.class);
 
+    public static final String LOCK_ALERT_MESSAGE = "Gas Meter is locked";
+
     private final String name;
     private double measure;
     private double batteryLevel;
     private final String geohash;
     private Set<String> alertingMessages;
     private final VirtualGasMeterGateway virtualGasMeterGateway;
+    private boolean lock;
 
     public VirtualGasMeter(String name, String geohash, VirtualGasMeterGateway virtualGasMeterGateway) {
         this.virtualGasMeterGateway = virtualGasMeterGateway;
@@ -28,6 +32,7 @@ public class VirtualGasMeter {
                 .get(VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
         this.batteryLevel = (Double) virtualGasMeterGateway.getProperties()
                 .get(VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
+
     }
 
     public String getName() {
@@ -55,11 +60,23 @@ public class VirtualGasMeter {
     }
 
     public Set<String> getAlertingMessages() {
+        if (alertingMessages == null) {
+            alertingMessages = new HashSet<String>();
+        }
         return alertingMessages;
     }
 
-    public void setAlertingMessages(Set<String> alertingMessages) {
-        this.alertingMessages = alertingMessages;
+    public boolean isLock() {
+        return lock;
+    }
+
+    public void setLock(boolean lock) {
+        this.lock = lock;
+        if (lock) {
+            getAlertingMessages().add(LOCK_ALERT_MESSAGE);
+        } else {
+            getAlertingMessages().remove(LOCK_ALERT_MESSAGE);
+        }
         sendAlertMessage();
     }
 
@@ -80,8 +97,10 @@ public class VirtualGasMeter {
 
             Long currentTimestamp = new Date().getTime();
 
-            double consumption = random.nextDouble() * maxConsumption;
-            measure = round(measure + consumption, 2);
+            if (!lock) {
+                double consumption = random.nextDouble() * maxConsumption;
+                measure = round(measure + consumption, 2);
+            }
 
             double batteryComsumption = round(random.nextDouble() * maxBatteryConsumption, 2);
             batteryLevel = round(batteryLevel - batteryComsumption, 2);
@@ -122,7 +141,7 @@ public class VirtualGasMeter {
         return Math.round(value * temp) / temp;
     }
 
-    private void sendAlertMessage() {
+    public void sendAlertMessage() {
         synchronized (virtualGasMeterGateway) {
             Map<String, Object> m_properties = virtualGasMeterGateway.getProperties();
 
