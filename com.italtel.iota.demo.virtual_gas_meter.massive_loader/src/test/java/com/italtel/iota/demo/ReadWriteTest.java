@@ -22,8 +22,9 @@ public class ReadWriteTest {
 
     private int counterSize = 10;
     private String counterPrefix = "Gas_Meter_";
+    private String influxDBUrl = "http://138.132.28.138:8086";
     private String retentionPolicy = "5years";
-    private String databaseName = "gas_metering_new";
+    private String databaseName = "gas_metering";
     private String measureName = "gas_metrics_1h";
     private String startDateString = "01/01/2014 03:00:00";
     private static double startMeasure = 0;
@@ -35,7 +36,7 @@ public class ReadWriteTest {
 
     @Before
     public void init() {
-        influxDB = InfluxDBFactory.connect("http://138.132.28.138:8086");
+        influxDB = InfluxDBFactory.connect(influxDBUrl);
         influxDB.createDatabase(databaseName);
     }
 
@@ -75,7 +76,10 @@ public class ReadWriteTest {
                 measure += consumption;
 
                 point = Point.measurement(measureName).time(date.getTimeInMillis(), TimeUnit.MILLISECONDS)
-                        .addField("measure", measure).build();
+                        .addField("measure", measure).tag("dayofweek", Integer.toString(date.get(Calendar.DAY_OF_WEEK)))
+                        .tag("weekofyear", Integer.toString(date.get(Calendar.WEEK_OF_YEAR)))
+                        .tag("month", Integer.toString(date.get(Calendar.MONTH)))
+                        .tag("year", Integer.toString(date.get(Calendar.YEAR))).build();
                 batchPoints.point(point);
                 date.add(Calendar.HOUR_OF_DAY, 1);
             }
