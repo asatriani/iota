@@ -11,6 +11,7 @@
  *******************************************************************************/
 package com.italtel.iota.demo;
 
+import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -189,13 +190,20 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     @Override
     public void onControlMessageArrived(String deviceId, String controlTopic, KuraPayload msg, int qos,
             boolean retain) {
+        KuraRequestPayload request;
         if (!(msg instanceof KuraRequestPayload)) {
-            s_logger.warn("Unexpected control message: discard it!");
-            return;
+            try {
+                request = KuraRequestPayload.buildFromKuraPayload(msg);
+            } catch (ParseException e) {
+                s_logger.warn("Unexpected control message: {}. Discard it!", e.getMessage());
+                return;
+            }
+        } else {
+            request = (KuraRequestPayload) msg;
         }
 
-        s_logger.info("Control message arrived: {} on {} {} {} {}", deviceId, controlTopic, msg, qos, retain);
-        KuraRequestPayload request = (KuraRequestPayload) msg;
+        s_logger.info("Control message arrived to {} on {} from {}", deviceId, controlTopic,
+                request.getRequesterClientId());
 
         KuraResponsePayload response = null;
         if (CONTROL_TOPIC_LOCK.equals(controlTopic)) {
@@ -274,12 +282,14 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
             response = new KuraResponsePayload(404);
         }
 
-        String topic = "REPLY/" + request.getRequestId();
+        String respApptopic = "REPLY/" + request.getRequestId();
+        String respClientId = request.getRequesterClientId();
         try {
-            m_cloudClient.controlPublish(topic, response, 0, false, 0);
-            s_logger.info("Published response message on topic {}", topic);
+            m_cloudClient.controlPublish(respClientId, respApptopic, response, 0, false, 0);
+            s_logger.info("Published response message on topic {} for {}", respApptopic, respClientId);
         } catch (Exception e) {
-            s_logger.error("Cannot publish response message on topic {}: {}", topic, e.getMessage(), e);
+            s_logger.error("Cannot publish response message on topic {} for {}: {}", respApptopic, respClientId,
+                    e.getMessage(), e);
         }
     }
 
