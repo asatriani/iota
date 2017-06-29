@@ -15,6 +15,7 @@ import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -231,52 +232,51 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                 s_logger.info("Meter {}'s battery reloaded ", virtualGasMeter.getName());
             }
         } else if (CONTROL_TOPIC_SET_ALERTS.equals(controlTopic)) {
-            String alerts = (String) msg.getMetric("alerts");
-            if (alerts == null || alerts.trim().length() == 0) {
-                s_logger.error("Invalid alerts field: {}", alerts);
-                response = new KuraResponsePayload(400);
-            } else {
-                Pattern alertPattern = Pattern.compile("(\\d+)\\[([\\d ]+)\\]");
-                String[] s = alerts.split("\\|");
-                for (String part : s) {
-                    Matcher m = alertPattern.matcher(part);
-                    if (!m.matches()) {
-                        s_logger.error("Alerting config string '{}' is not valid because it must match regex: {}", part,
-                                alertPattern.pattern());
-                        continue;
-                    }
+            String alertString = (String) msg.getMetric("alerts");
+            if (alertString == null) {
+                s_logger.error("Alerts field is null!");
+                return;
+            }
 
-                    String meterName = METER_PREFIX_NAME + m.group(1);
-                    VirtualGasMeter vgm = meters.get(meterName);
-                    if (vgm == null) {
-                        s_logger.error(
-                                "Alerting config string '{}' is not valid because it refences an invald virtual gas meter index: {}",
-                                part, m.group(1));
-                        continue;
-                    }
+            Pattern alertPattern;
+            for (VirtualGasMeter vgm : meters.values()) {
+                Set<String> alertingMessages = vgm.getAlertingMessages();
 
+                alertPattern = Pattern.compile(vgm.getName() + "\\[([\\d ]+)\\]");
+                Matcher m = alertPattern.matcher(alertString);
+                if (m.find()) {
                     // Clear old alerts except lock message
-                    vgm.getAlertingMessages().clear();
+                    alertingMessages.clear();
                     if (vgm.isLock()) {
-                        vgm.getAlertingMessages().add(VirtualGasMeter.LOCK_ALERT_MESSAGE);
+                        alertingMessages.add(VirtualGasMeter.LOCK_ALERT_MESSAGE);
                     }
 
-                    String[] alert = m.group(2).split(" ");
-                    for (String a : alert) {
+                    String[] alerts = m.group(1).split(" ");
+                    for (String a : alerts) {
                         int alertIndex = Integer.parseInt(a);
                         if (alertIndex > ALERT_MESSAGES.length - 1) {
                             s_logger.error(
-                                    "Alerting config string '{}' is not valid because it refences an invald alerting message index: {}",
-                                    part, a);
+                                    "Alerting config is not valid because it refences an invald alerting message index: {}",
+                                    a);
                             continue;
                         }
-                        vgm.getAlertingMessages().add(ALERT_MESSAGES[alertIndex]);
+                        alertingMessages.add(ALERT_MESSAGES[alertIndex]);
                     }
                     vgm.sendAlertMessage();
-                    s_logger.info("Alerts set on meter {}", vgm.getName());
+                    s_logger.info("Alert update sent for meter {}", vgm.getName());
+
+                } else {
+                    if (alertingMessages.size() > 1 || !alertingMessages.contains(VirtualGasMeter.LOCK_ALERT_MESSAGE)) {
+                        alertingMessages.clear();
+                        if (vgm.isLock()) {
+                            alertingMessages.add(VirtualGasMeter.LOCK_ALERT_MESSAGE);
+                        }
+                        vgm.sendAlertMessage();
+                        s_logger.info("Alert update sent for meter {}", vgm.getName());
+                    }
                 }
-                response = new KuraResponsePayload(200);
             }
+            response = new KuraResponsePayload(200);
         } else {
             s_logger.error("Unknown topic {}", controlTopic);
             response = new KuraResponsePayload(404);
