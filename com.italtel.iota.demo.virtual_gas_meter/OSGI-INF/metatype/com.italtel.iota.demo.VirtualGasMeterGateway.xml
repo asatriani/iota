@@ -6,13 +6,13 @@
         
         <Icon resource="OSGI-INF/virtual_gas_meter_gateway.png" size="32"/>
 
-        <AD id="meter.size"
-            name="meter.size"
+        <AD id="initial.virtual.meter.size"
+            name="initial.virtual.meter.size"
             type="Integer"
             cardinality="0" 
             required="true"
-            default="1" 
-            description="Amount of meters."/>
+            default="0" 
+            description="Initial amount of meters."/>
 
         <AD id="initial.measure"  
             name="initial.measure"
@@ -20,7 +20,7 @@
             cardinality="0" 
             required="true"
             default="450"
-            description="Initial value for the measure metric."/>
+            description="Initial value for measure metric."/>
             
          <AD id="max.consumption"
             name="max.consumption"
@@ -46,6 +46,38 @@
             default="0.01" 
             description="Decrement of level of battery"/>
 
+         <AD id="low.battery.level"
+            name="low.battery.level"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="10.0" 
+            description="When battery level goes under this value the meter will throw an alert message"/>
+
+         <AD id="auto.reload.battery.level"
+            name="auto.reload.battery.level"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="2.0" 
+            description="When battery level goes under this value the battery level will be auto reloaded to initial value"/>
+
+        <AD id="initial.temperature"  
+            name="initial.temperature"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="15.2"
+            description="Initial value for temperature metric."/>
+            
+         <AD id="max.temperature.deviation"
+            name="max.temperature.deviation"
+            type="Double"
+            cardinality="0" 
+            required="true"
+            default="0.5" 
+            description="Max deviation of temperature metric."/>
+
         <AD id="ref.location"  
             name="ref.location"
             type="String"
@@ -61,14 +93,6 @@
             required="true"
             default="0 0 0/1 1/1 * ? *" 
             description="Default cron expression to schedule sending measure."/>
-
-        <AD id="alerting.messages.as.array"  
-            name="alerting.messages.as.array"
-            type="Boolean"
-            cardinality="0" 
-            required="true"
-            default="false" 
-            description="Default flag to publish alerting messages in a string array or single string."/>
 
         <AD id="publish.semanticTopic"  
             name="publish.semanticTopic"

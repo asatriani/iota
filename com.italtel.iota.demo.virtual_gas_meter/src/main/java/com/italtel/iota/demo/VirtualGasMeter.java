@@ -1,44 +1,123 @@
 package com.italtel.iota.demo;
 
-import java.util.Date;
+import java.io.Serializable;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Random;
+import java.util.Optional;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class VirtualGasMeter {
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import ch.hsr.geohash.GeoHash;
+
+public class VirtualGasMeter implements Serializable {
+
+    private static final long serialVersionUID = -7548325806050930900L;
 
     private static final Logger s_logger = LoggerFactory.getLogger(VirtualGasMeter.class);
 
-    public static final String LOCK_ALERT_MESSAGE = "Gas Meter is locked";
+    private static final String LOCK_ALERT_MESSAGE = "Gas meter is locked";
+    private static final String BATTERY_ALERT_MESSAGE = "Battery level is very low";
 
-    private final String name;
+    private transient VirtualGasMeterGateway gw;
+
+    private String id;
+    private String coordinates;
+    private transient String geohash;
     private double measure;
-    private double batteryLevel;
-    private final String geohash;
-    private Set<String> alertingMessages;
-    private final VirtualGasMeterGateway virtualGasMeterGateway;
-    private boolean lock;
+    private double battery;
+    private double temperature;
+    private boolean offline;
+    private boolean locked;
+    private Set<String> activeAlertMsgs;
 
-    public VirtualGasMeter(String name, String geohash, VirtualGasMeterGateway virtualGasMeterGateway) {
-        this.virtualGasMeterGateway = virtualGasMeterGateway;
-        this.name = name;
+    public VirtualGasMeter() {
+    }
+
+    public VirtualGasMeter(String id, VirtualGasMeterGateway gw) {
+        this(id, gw, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    public VirtualGasMeter(String id, VirtualGasMeterGateway gw, Optional<String> coordinates, Optional<Double> measure,
+            Optional<Double> battery, Optional<Double> temperature) {
+        this.gw = gw;
+        this.id = id;
+        this.coordinates = coordinates.orElse(gw.getRandomGenerator().getCoordinates());
+        this.measure = measure
+                .orElse((Double) gw.getProperties().get(VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME));
+        this.battery = battery
+                .orElse((Double) gw.getProperties().get(VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME));
+        this.temperature = temperature
+                .orElse((Double) gw.getProperties().get(VirtualGasMeterGateway.INITIAL_TEMEPERATURE_PROP_NAME));
+    }
+
+    @JsonIgnore
+    public VirtualGasMeterGateway getVirtualGasMeterGateway() {
+        return gw;
+    }
+
+    public void setVirtualGasMeterGateway(VirtualGasMeterGateway gw) {
+        this.gw = gw;
+    }
+
+    @JsonProperty
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    @JsonProperty
+    public String getCoordinates() {
+        return coordinates;
+    }
+
+    public void setCoordinates(String coordinates) {
+        if (coordinates == null || coordinates.trim().isEmpty()) {
+            throw new RuntimeException("Coordinates are null or empty!");
+        }
+
+        String[] parts = coordinates.split(",");
+        if (parts.length != 2) {
+            throw new RuntimeException("Coordinates are not separated by ','");
+        }
+
+        float lat = Float.parseFloat(parts[0].trim());
+        if (lat < -90 || lat > 90) {
+            throw new RuntimeException("Latitude is invalid!");
+        }
+
+        float lon = Float.parseFloat(parts[1].trim());
+        if (lon < -180 || lon > 180) {
+            throw new RuntimeException("Longitude is invalid!");
+        }
+
+        this.coordinates = coordinates;
+    }
+
+    @JsonIgnore
+    public String getGeohash() {
+        if (geohash == null) {
+            String[] parts = coordinates.split(",");
+            return GeoHash
+                    .withCharacterPrecision(Float.parseFloat(parts[0].trim()), Float.parseFloat(parts[1].trim()), 9)
+                    .toBase32();
+        }
+        return geohash;
+    }
+
+    public void setGeohash(String geohash) {
         this.geohash = geohash;
-        this.measure = (Double) virtualGasMeterGateway.getProperties()
-                .get(VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
-        this.batteryLevel = (Double) virtualGasMeterGateway.getProperties()
-                .get(VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
-
     }
 
-    public String getName() {
-        return name;
-    }
-
+    @JsonProperty
     public double getMeasure() {
         return measure;
     }
@@ -47,142 +126,197 @@ public class VirtualGasMeter {
         this.measure = measure;
     }
 
-    public double getBatteryLevel() {
-        return batteryLevel;
+    @JsonProperty
+    public double getBattery() {
+        return battery;
     }
 
-    public void setBatteryLevel(double batteryLevel) {
-        this.batteryLevel = batteryLevel;
+    public void setBattery(double battery) {
+        this.battery = battery;
     }
 
-    public String getGeohash() {
-        return geohash;
+    @JsonProperty
+    public double getTemperature() {
+        return temperature;
     }
 
-    public Set<String> getAlertingMessages() {
-        if (alertingMessages == null) {
-            alertingMessages = new HashSet<String>();
+    public void setTemperature(double temperature) {
+        this.temperature = temperature;
+    }
+
+    @JsonProperty
+    public boolean isOffline() {
+        return offline;
+    }
+
+    public void setOffline(boolean offline) {
+        this.offline = offline;
+    }
+
+    @JsonProperty
+    public boolean isLocked() {
+        return locked;
+    }
+
+    public void setLocked(boolean locked) {
+        this.locked = locked;
+    }
+
+    @JsonProperty("alerts")
+    public Set<String> getActiveAlertMsgs() {
+        Set<String> tmpAlertMsgs = new HashSet<>();
+        if (activeAlertMsgs != null) {
+            tmpAlertMsgs.addAll(activeAlertMsgs);
         }
-        return alertingMessages;
-    }
 
-    public boolean isLock() {
-        return lock;
-    }
-
-    public void setLock(boolean lock) {
-        this.lock = lock;
-        if (lock) {
-            getAlertingMessages().add(LOCK_ALERT_MESSAGE);
-        } else {
-            getAlertingMessages().remove(LOCK_ALERT_MESSAGE);
+        if (locked) {
+            tmpAlertMsgs.add(LOCK_ALERT_MESSAGE);
         }
-        sendAlertMessage();
+
+        if (battery < (Double) gw.getProperties().get(VirtualGasMeterGateway.LOW_BATTERY_LEVEL_PROP_NAME)) {
+            tmpAlertMsgs.add(BATTERY_ALERT_MESSAGE);
+        }
+
+        return tmpAlertMsgs;
     }
 
-    public void sendMetricMessage() {
-        synchronized (virtualGasMeterGateway) {
-            Map<String, Object> m_properties = virtualGasMeterGateway.getProperties();
-            Random random = virtualGasMeterGateway.getRandom();
+    public void setActiveAlertMsgs(Set<String> activeAlertMsgs) {
+        this.activeAlertMsgs = null;
+        if (activeAlertMsgs != null) {
+            this.activeAlertMsgs = new HashSet<>(activeAlertMsgs);
+            this.activeAlertMsgs.remove(LOCK_ALERT_MESSAGE);
+            this.activeAlertMsgs.remove(BATTERY_ALERT_MESSAGE);
+        }
+    }
 
-            // fetch the publishing configuration from the publishing properties
-            Double maxConsumption = (Double) m_properties.get(VirtualGasMeterGateway.MAX_CONSUMPTION_PROP_NAME);
-            Double maxBatteryConsumption = (Double) m_properties
-                    .get(VirtualGasMeterGateway.MAX_BATTERY_LEVEL_CONSUMPTION_PROP_NAME);
-            Boolean alertMsgAsArray = (Boolean) m_properties
-                    .get(VirtualGasMeterGateway.ALERTING_MESSAGES_AS_ARRAY_PROP_NAME);
-            String topic = (String) m_properties.get(VirtualGasMeterGateway.PUBLISH_TOPIC_PROP_NAME);
-            Integer qos = (Integer) m_properties.get(VirtualGasMeterGateway.PUBLISH_QOS_PROP_NAME);
-            Boolean retain = (Boolean) m_properties.get(VirtualGasMeterGateway.PUBLISH_RETAIN_PROP_NAME);
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("VirtualGasMeter [id=").append(id).append(", coordinates=").append(coordinates)
+                .append(", geohash=").append(getGeohash()).append(", measure=").append(measure).append(", battery=")
+                .append(battery).append(", temperature=").append(temperature).append(", offline=").append(offline)
+                .append(", locked=").append(locked).append(", activeAlertMsgs=").append(getActiveAlertMsgs())
+                .append("]");
+        return builder.toString();
+    }
 
-            Long currentTimestamp = new Date().getTime();
+    public boolean hasIdenticalActiveAlertMsgs(VirtualGasMeter other) {
+        return getActiveAlertMsgs().equals(other.getActiveAlertMsgs());
+    }
 
-            if (!lock) {
-                double consumption = random.nextDouble() * maxConsumption;
-                measure = round(measure + consumption, 2);
+    public void sendMetricMessage(long timestamp) {
+        synchronized (gw) {
+            Map<String, Object> properties = gw.getProperties();
+
+            if (!offline) {
+                // Publish metric
+                String parentTopic = (String) properties.get(VirtualGasMeterGateway.PUBLISH_TOPIC_PROP_NAME);
+                String meterTopic = id + "/" + parentTopic;
+                Integer qos = (Integer) properties.get(VirtualGasMeterGateway.PUBLISH_QOS_PROP_NAME);
+                Boolean retain = (Boolean) properties.get(VirtualGasMeterGateway.PUBLISH_RETAIN_PROP_NAME);
+
+                ObjectMapper mapper = new ObjectMapper();
+                Metric metric = makeMetric(timestamp);
+                try {
+                    gw.getCloudClient().publish(meterTopic, mapper.writeValueAsBytes(metric), qos, retain, 5);
+                    s_logger.info("Published metric message {} to {} for {}", metric, meterTopic, id);
+                } catch (Exception e) {
+                    s_logger.error("Cannot publish metric message {} on topic {} for {}: {}", metric, meterTopic, id,
+                            e.getMessage(), e);
+                }
+            } else {
+                s_logger.warn("No sent metric message because meter {} is offline", id);
             }
 
-            double batteryComsumption = round(random.nextDouble() * maxBatteryConsumption, 2);
-            batteryLevel = round(batteryLevel - batteryComsumption, 2);
+            // Update measure, battery level and temperature
+            RandomGenerator randomGenerator = gw.getRandomGenerator();
+            if (!locked) {
+                measure = round(measure + randomGenerator.getConsumption(), 2);
+            }
 
-            StringBuilder b = new StringBuilder("{").append("\"timestamp\": ").append(currentTimestamp)
-                    .append(", \"meter\": \"").append(name).append("\", \"geohash\": \"").append(geohash)
-                    .append("\", \"measure\": ").append(measure).append(", \"battery\": ").append(batteryLevel)
-                    .append(", \"alertingCount\": ").append(alertingMessages != null ? alertingMessages.size() : 0)
-                    .append(", \"alertingMessages\": ");
-            b.append(alertMsgAsArray ? "[" : "\"");
-            if (alertingMessages != null && !alertingMessages.isEmpty()) {
-                for (Iterator<String> iterator = alertingMessages.iterator(); iterator.hasNext();) {
-                    b.append(alertMsgAsArray ? "\"" : "").append(iterator.next()).append(alertMsgAsArray ? "\"" : "");
-                    if (iterator.hasNext()) {
-                        b.append(", ");
-                    }
+            battery = round(battery - randomGenerator.getBatteryConsumption(), 2);
+            if (battery < 0) {
+                battery = 0;
+            }
+
+            double autoReloadBatteryLevel = (Double) properties
+                    .get(VirtualGasMeterGateway.AUTO_RELOAD_BATTERY_LEVEL_PROP_NAME);
+            if (autoReloadBatteryLevel > 0 && battery < autoReloadBatteryLevel) {
+                battery = (Double) properties.get(VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
+            }
+
+            temperature = round(temperature + randomGenerator.getTemperatureDeviation(), 2);
+        }
+    }
+
+    public void sendCurrentAlertMessages() {
+        sendAlertMessages(makeAlerts(System.currentTimeMillis(), false), false);
+    }
+
+    public void sendClearingCurrentAlertMessages() {
+        sendAlertMessages(makeAlerts(System.currentTimeMillis(), true), true);
+    }
+
+    public void sendAlertMessages(Set<Alert> alerts, boolean force) {
+        synchronized (gw) {
+            if (!force && offline) {
+                s_logger.warn("No sent alert message because meter {} is offline", id);
+                return;
+            }
+
+            Map<String, Object> properties = gw.getProperties();
+            String parentTopic = (String) properties.get(VirtualGasMeterGateway.PUBLISH_ALERT_TOPIC_PROP_NAME);
+            String meterTopic = id + "/" + parentTopic;
+            Integer qos = (Integer) properties.get(VirtualGasMeterGateway.PUBLISH_QOS_PROP_NAME);
+            Boolean retain = (Boolean) properties.get(VirtualGasMeterGateway.PUBLISH_RETAIN_PROP_NAME);
+
+            // Publish alert
+            ObjectMapper mapper = new ObjectMapper();
+            for (Alert alert : alerts) {
+                try {
+                    gw.getCloudClient().publish(meterTopic, mapper.writeValueAsBytes(alert), qos, retain, 5);
+                    s_logger.info("Published alert message {} to {} for {}", alert, meterTopic, id);
+                } catch (Exception e) {
+                    s_logger.error("Cannot publish alert message {} on topic {} for {}: {}", alert, meterTopic, id,
+                            e.getMessage(), e);
                 }
             }
-            b.append(alertMsgAsArray ? "]" : "\"");
-            b.append(" }");
-
-            String destTopic = new StringBuilder(name).append("/").append(topic).toString();
-
-            // Publish the message
-            try {
-                virtualGasMeterGateway.getCloudClient().publish(destTopic, b.toString().getBytes(), qos, retain, 5);
-                s_logger.info("Published message to {} for {}", destTopic, name);
-            } catch (Exception e) {
-                s_logger.error("Cannot publish on topic {} for {}: {}", destTopic, name, e.getMessage(), e);
-            }
-
         }
+    }
 
+    private Metric makeMetric(long timestamp) {
+        Metric m = new Metric();
+        m.setTimestamp(timestamp);
+        m.setMeter(id);
+        m.setGeohash(getGeohash());
+        m.setMeasure(measure);
+        m.setBattery(battery);
+        m.setTemperature(temperature);
+        Set<String> aMsgs = getActiveAlertMsgs();
+        m.setAlertMsgs(aMsgs.toArray(new String[aMsgs.size()]));
+        return m;
+    }
+
+    private Set<Alert> makeAlerts(long timestamp, boolean clearing) {
+        return makeAlerts(getActiveAlertMsgs(), timestamp, clearing);
+    }
+
+    public Set<Alert> makeAlerts(Set<String> alertMsgs, long timestamp, boolean clearing) {
+        Set<Alert> alerts = new HashSet<>();
+        for (String aam : alertMsgs) {
+            Alert a = new Alert();
+            a.setTimestamp(timestamp);
+            a.setMeter(id);
+            a.setGeohash(getGeohash());
+            a.setAlertMsg(aam);
+            a.setClosed(clearing);
+            alerts.add(a);
+        }
+        return alerts;
     }
 
     private double round(double value, int decNum) {
         double temp = Math.pow(10, decNum);
         return Math.round(value * temp) / temp;
     }
-
-    public void sendAlertMessage() {
-        synchronized (virtualGasMeterGateway) {
-            Map<String, Object> m_properties = virtualGasMeterGateway.getProperties();
-
-            // fetch the publishing configuration from the publishing properties
-            Boolean alertMsgAsArray = (Boolean) m_properties
-                    .get(VirtualGasMeterGateway.ALERTING_MESSAGES_AS_ARRAY_PROP_NAME);
-            String topic = (String) m_properties.get(VirtualGasMeterGateway.PUBLISH_ALERT_TOPIC_PROP_NAME);
-            Integer qos = (Integer) m_properties.get(VirtualGasMeterGateway.PUBLISH_QOS_PROP_NAME);
-            Boolean retain = (Boolean) m_properties.get(VirtualGasMeterGateway.PUBLISH_RETAIN_PROP_NAME);
-
-            StringBuilder b = new StringBuilder("{").append("\"timestamp\": ").append(new Date().getTime())
-                    .append(", \"meter\": \"").append(name).append("\", \"alertingCount\": ")
-                    .append(alertingMessages != null ? alertingMessages.size() : 0).append(", \"alertingMessages\": ");
-            b.append(alertMsgAsArray ? "[" : "\"");
-            if (alertingMessages != null && !alertingMessages.isEmpty()) {
-                for (Iterator<String> iterator = alertingMessages.iterator(); iterator.hasNext();) {
-                    b.append(alertMsgAsArray ? "\"" : "").append(iterator.next()).append(alertMsgAsArray ? "\"" : "");
-                    if (iterator.hasNext()) {
-                        b.append(", ");
-                    }
-                }
-            }
-            b.append(alertMsgAsArray ? "]" : "\"");
-            b.append(" }");
-
-            String destTopic = new StringBuilder(name).append("/").append(topic).toString();
-
-            // Publish the message
-            try {
-                virtualGasMeterGateway.getCloudClient().publish(destTopic, b.toString().getBytes(), qos, retain, 5);
-                s_logger.info("Published message to {} for {}", destTopic, name);
-            } catch (Exception e) {
-                s_logger.error("Cannot publish on topic {} for {}: {}", destTopic, name, e.getMessage(), e);
-            }
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "VirtualGasMeter [name=" + name + ", measure=" + measure + ", batteryLevel=" + batteryLevel
-                + ", geohash=" + geohash + ", alertingMessages=" + alertingMessages + "]";
-    }
-
 }

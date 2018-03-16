@@ -22,14 +22,14 @@ public class ReadWriteTest {
 
     private int counterSize = 10;
     private String counterPrefix = "Gas_Meter_";
-    private String influxDBUrl = "http://138.132.28.138:8086";
+    private String influxDBUrl = "http://iota01.italtel.com:8086";
     private String retentionPolicy = "5years";
     private String databaseName = "gas_metering";
     private String measureName = "gas_metrics_1h";
     private String startDateString = "01/01/2014 03:00:00";
     private static double startMeasure = 0;
 
-    private static InfluxDB influxDB;
+    private InfluxDB influxDB;
 
     public ReadWriteTest() {
     }

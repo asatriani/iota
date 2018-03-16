@@ -1,0 +1,13 @@
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\GasMeterController.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\resources\GasMeterControllerService.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\GasMeter.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\KuraGasMeterResponse.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\Metric.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\validator\CheckCoordinates.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\Result.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\MqttDataCollector.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\KuraGasMeterRequest.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\BackendConfiguration.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\validator\CheckCoordinatesValidator.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\BackendApplication.java
+D:\Users\satriani\Documents\GitHub\iota\com.italtel.iota.demo.virtual_gas_meter.backend\src\main\java\com\italtel\iota\demo\virtual_gas_meter\api\Alert.java

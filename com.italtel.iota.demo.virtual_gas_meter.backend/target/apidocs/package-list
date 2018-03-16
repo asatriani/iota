@@ -1,0 +1,7 @@
+com.italtel.iota.demo.virtual_gas_meter
+com.italtel.iota.demo.virtual_gas_meter.api
+com.italtel.iota.demo.virtual_gas_meter.api.mapper
+com.italtel.iota.demo.virtual_gas_meter.api.validator
+com.italtel.iota.demo.virtual_gas_meter.core
+com.italtel.iota.demo.virtual_gas_meter.health
+com.italtel.iota.demo.virtual_gas_meter.resources

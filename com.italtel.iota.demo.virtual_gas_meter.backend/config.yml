@@ -1,0 +1,33 @@
+#gasMeterDBConnector:
+#  influxdbUrl:
+
+#gasMeterMqttDataCollector:
+#  brokerUrl:
+#  clientId:
+#  qos:
+
+#gasMeterController:
+#  brokerUrl:
+#  clientId:
+#  qos:
+
+server:
+  applicationConnectors:
+  - type: http
+    port: 9090
+  adminConnectors:
+  - type: http
+    port: 9091
+logging:
+  level: INFO
+  loggers:
+    com.italtel.iota.demo.virtual_gas_meter: DEBUG
+  appenders:
+    - type: console
+      threshold: DEBUG
+      target: stdout
+    - type: file
+      threshold: DEBUG
+      currentLogFilename: ./logs/backend.log
+      archivedLogFilenamePattern: ./logs/backend-%d.log.gz
+      archivedFileCount: 6

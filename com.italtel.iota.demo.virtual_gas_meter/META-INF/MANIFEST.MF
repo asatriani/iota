@@ -7,11 +7,15 @@ Bundle-Vendor: Italtel
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
 Service-Component: OSGI-INF/*.xml
 Bundle-ActivationPolicy: lazy
-Import-Package: org.eclipse.kura.cloud; version="[1.0,2.0)",
- org.eclipse.kura.configuration; version="[1.0,2.0)",
- org.eclipse.kura.message; version="[1.0,2.0)",
+Import-Package: org.eclipse.kura.cloud;version="[1.0,2.0)",
+ org.eclipse.kura.configuration;version="[1.0,2.0)",
+ org.eclipse.kura.message;version="[1.0,2.0)",
  org.osgi.service.component;version="1.2.0",
- org.slf4j;version="1.6.4"
+ org.slf4j;version="1.6.4",
+ org.w3c.dom
 Bundle-Classpath: lib/quartz-2.2.3.jar,
  lib/geohash-1.3.0.jar,
+ lib/jackson-annotations-2.8.7.jar,
+ lib/jackson-core-2.8.7.jar,
+ lib/jackson-databind-2.8.7.jar,
  .

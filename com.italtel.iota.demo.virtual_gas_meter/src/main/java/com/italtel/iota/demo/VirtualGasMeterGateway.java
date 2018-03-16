@@ -1,23 +1,13 @@
-/*******************************************************************************
- * Copyright (c) 2011, 2016 Eurotech and/or its affiliates
- *
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- *
- * Contributors:
- *     Eurotech
- *******************************************************************************/
 package com.italtel.iota.demo;
 
 import java.text.ParseException;
-import java.util.HashMap;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.eclipse.kura.cloud.CloudClient;
 import org.eclipse.kura.cloud.CloudClientListener;
@@ -40,15 +30,14 @@ import org.quartz.impl.StdSchedulerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import ch.hsr.geohash.GeoHash;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClientListener {
 
     private static final Logger s_logger = LoggerFactory.getLogger(VirtualGasMeterGateway.class);
 
-    // Cloud Application identifier
+    // Application identifier
     private static final String APP_ID = "VirtualGasMeterGateway";
-
     public static final String METER_PREFIX_NAME = "Gas_Meter_";
 
     // Publishing Property Names
@@ -58,30 +47,36 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     public static final String PUBLISH_QOS_PROP_NAME = "publish.qos";
     public static final String PUBLISH_RETAIN_PROP_NAME = "publish.retain";
 
-    public static final String METER_SIZE_PROP_NAME = "meter.size";
+    public static final String INITIAL_METER_SIZE_PROP_NAME = "initial.virtual.meter.size";
 
     public static final String INITIAL_MEASURE_PROP_NAME = "initial.measure";
     public static final String MAX_CONSUMPTION_PROP_NAME = "max.consumption";
 
     public static final String INITIAL_BATTERY_LEVEL_PROP_NAME = "initial.battery.level";
     public static final String MAX_BATTERY_LEVEL_CONSUMPTION_PROP_NAME = "max.battery.level.consumption";
+    public static final String LOW_BATTERY_LEVEL_PROP_NAME = "low.battery.level";
+    public static final String AUTO_RELOAD_BATTERY_LEVEL_PROP_NAME = "auto.reload.battery.level";
+
+    public static final String INITIAL_TEMEPERATURE_PROP_NAME = "initial.temperature";
+    public static final String MAX_TEMEPERATURE_DEVIATION_PROP_NAME = "max.temperature.deviation";
 
     public static final String REFERENCE_LOCATION_PROP_NAME = "ref.location";
 
-    public static final String ALERTING_MESSAGES_AS_ARRAY_PROP_NAME = "alerting.messages.as.array";
+    private static final String CONTROL_TOPIC_PATCH = "PATCH";
+    private static final String CONTROL_TOPIC_GET = "GET";
+    private static final String CONTROL_TOPIC_DELETE = "DELETE";
+    private static final String CONTROL_TOPIC_POST = "POST";
+    private static final String CONTROL_TOPIC_MASSIVE_LOAD = "MASSIVE_LOAD";
+    private static final String CONTROL_TOPIC_PING = "PING";
 
-    public static final String[] ALERT_MESSAGES = new String[] { "Hardware fault detected", "Gas leak detected",
-            "Tampering detected" };
+    private CloudService cloudService;
+    private CloudClient cloudClient;
 
-    private static final String CONTROL_TOPIC_LOCK = "lock";
-    private static final String CONTROL_TOPIC_RELOAD_BATTERY = "reload_battery";
-    private static final String CONTROL_TOPIC_SET_ALERTS = "set_alerts";
-
-    private CloudService m_cloudService;
-    private CloudClient m_cloudClient;
-
-    private Map<String, Object> m_properties;
-    private Random m_random;
+    private Map<String, Object> properties;
+    private String cronExpr;
+    private Float refLatitude;
+    private Float refLongitude;
+    private RandomGenerator randomGenerator;
     private JobDetail sendMeasureJob;
     private Trigger trigger;
     private Scheduler scheduler;
@@ -89,18 +84,15 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     private Map<String, VirtualGasMeter> meters;
 
     public VirtualGasMeterGateway() {
-        super();
-        m_random = new Random();
-        meters = new HashMap<>();
-
+        randomGenerator = new RandomGenerator(this);
     }
 
     public void setCloudService(CloudService cloudService) {
-        this.m_cloudService = cloudService;
+        this.cloudService = cloudService;
     }
 
     public void unsetCloudService(CloudService cloudService) {
-        this.m_cloudService = null;
+        this.cloudService = null;
     }
 
     public Map<String, VirtualGasMeter> getMeters() {
@@ -108,15 +100,23 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     }
 
     public Map<String, Object> getProperties() {
-        return m_properties;
-    }
-
-    public Random getRandom() {
-        return m_random;
+        return properties;
     }
 
     public CloudClient getCloudClient() {
-        return m_cloudClient;
+        return cloudClient;
+    }
+
+    public RandomGenerator getRandomGenerator() {
+        return randomGenerator;
+    }
+
+    public Float getRefLatitude() {
+        return refLatitude;
+    }
+
+    public Float getRefLongitude() {
+        return refLongitude;
     }
 
     // ----------------------------------------------------------------
@@ -128,17 +128,17 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
     protected void activate(ComponentContext componentContext, Map<String, Object> properties) {
         s_logger.info("Activating VirtualGasMeterGateway...");
 
-        this.m_properties = properties;
-        for (String s : properties.keySet()) {
-            s_logger.info("Activate - " + s + ": " + properties.get(s));
+        this.properties = properties;
+        for (Entry<String, Object> e : properties.entrySet()) {
+            s_logger.info("Activate - {}: {}", e.getKey(), e.getValue());
         }
 
         // get the mqtt client for this application
         try {
             // Acquire a Cloud Application Client for this Application
             s_logger.info("Getting CloudClient for {}...", APP_ID);
-            this.m_cloudClient = this.m_cloudService.newCloudClient(APP_ID);
-            this.m_cloudClient.addCloudClientListener(this);
+            cloudClient = cloudService.newCloudClient(APP_ID);
+            cloudClient.addCloudClientListener(this);
 
             JobDataMap jobDM = new JobDataMap();
             jobDM.put("virtualGasMeterGateway", this);
@@ -146,44 +146,49 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                     .withIdentity("sendMeasureJob", "group").build();
 
             scheduler = new StdSchedulerFactory().getScheduler();
-
             scheduler.start();
-            // Don't subscribe because these are handled by the default
-            // subscriptions and we don't want to get messages twice
+
+            // Restore meters from file
+            meters = DataStoreUtils.restoreMeterMapFromFile(this);
+
             doUpdate(false);
+            s_logger.info("Activating VirtualGasMeterGateway... Done.");
         } catch (Exception e) {
-            s_logger.error("Error during component activation", e);
+            s_logger.error("Error during VirtualGasMeterGateway activation", e);
             throw new ComponentException(e);
         }
-
-        s_logger.info("Activating VirtualGasMeterGateway... Done.");
     }
 
     protected void deactivate(ComponentContext componentContext) {
-        s_logger.debug("Deactivating VirtualGasMeterGateway...");
+        synchronized (this) {
+            s_logger.debug("Deactivating VirtualGasMeterGateway...");
 
-        s_logger.info("Releasing Cloud Client for {}...", APP_ID);
-        this.m_cloudClient.release();
+            // Store meters in file
+            DataStoreUtils.storeMeterMapInFile(meters);
+            meters.clear();
 
-        try {
-            scheduler.shutdown();
-        } catch (SchedulerException e) {
-            s_logger.error("Error during scheduler shutdown", e);
+            try {
+                scheduler.shutdown();
+            } catch (SchedulerException e) {
+                s_logger.error("Error during scheduler shutdown", e.getMessage());
+            }
+
+            s_logger.info("Releasing Cloud Client for {}...", APP_ID);
+            cloudClient.release();
+
+            s_logger.debug("Deactivating VirtualGasMeterGateway... Done.");
         }
-
-        s_logger.debug("Deactivating VirtualGasMeterGateway... Done.");
     }
 
     public void updated(Map<String, Object> properties) {
         s_logger.info("Updated VirtualGasMeterGateway...");
 
         // store the properties received
-        this.m_properties = properties;
-        for (String s : properties.keySet()) {
-            s_logger.info("Update - " + s + ": " + properties.get(s));
+        this.properties = properties;
+        for (Entry<String, Object> e : properties.entrySet()) {
+            s_logger.info("Update - {}: {}", e.getKey(), e.getValue());
         }
 
-        // try to kick off a new job
         doUpdate(true);
         s_logger.info("Update VirtualGasMeterGateway...Done.");
     }
@@ -207,76 +212,18 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                 request.getRequesterClientId());
 
         KuraResponsePayload response = null;
-        if (CONTROL_TOPIC_LOCK.equals(controlTopic)) {
-            long meterID = (Long) msg.getMetric("meter");
-            boolean lock = (Boolean) msg.getMetric("lock");
-            VirtualGasMeter virtualGasMeter = meters.get(METER_PREFIX_NAME + meterID);
-            if (virtualGasMeter == null) {
-                s_logger.error("Meter {} not found!", meterID);
-                response = new KuraResponsePayload(404);
-            } else {
-                virtualGasMeter.setLock(lock);
-                response = new KuraResponsePayload(200);
-                s_logger.info("Meter {} locked", virtualGasMeter.getName());
-            }
-        } else if (CONTROL_TOPIC_RELOAD_BATTERY.equals(controlTopic)) {
-            long meterID = (Long) msg.getMetric("meter");
-            VirtualGasMeter virtualGasMeter = meters.get(METER_PREFIX_NAME + meterID);
-            if (virtualGasMeter == null) {
-                s_logger.error("Meter {} not found!", meterID);
-                response = new KuraResponsePayload(404);
-            } else {
-                double initialBatteryLevel = (Double) m_properties.get(INITIAL_BATTERY_LEVEL_PROP_NAME);
-                virtualGasMeter.setBatteryLevel(initialBatteryLevel);
-                response = new KuraResponsePayload(200);
-                s_logger.info("Meter {}'s battery reloaded ", virtualGasMeter.getName());
-            }
-        } else if (CONTROL_TOPIC_SET_ALERTS.equals(controlTopic)) {
-            String alertString = (String) msg.getMetric("alerts");
-            if (alertString == null) {
-                s_logger.error("Alerts field is null!");
-                return;
-            }
-
-            Pattern alertPattern;
-            for (VirtualGasMeter vgm : meters.values()) {
-                Set<String> alertingMessages = vgm.getAlertingMessages();
-
-                alertPattern = Pattern.compile(vgm.getName() + "\\[([\\d ]+)\\]");
-                Matcher m = alertPattern.matcher(alertString);
-                if (m.find()) {
-                    // Clear old alerts except lock message
-                    alertingMessages.clear();
-                    if (vgm.isLock()) {
-                        alertingMessages.add(VirtualGasMeter.LOCK_ALERT_MESSAGE);
-                    }
-
-                    String[] alerts = m.group(1).split(" ");
-                    for (String a : alerts) {
-                        int alertIndex = Integer.parseInt(a);
-                        if (alertIndex > ALERT_MESSAGES.length - 1) {
-                            s_logger.error(
-                                    "Alerting config is not valid because it refences an invald alerting message index: {}",
-                                    a);
-                            continue;
-                        }
-                        alertingMessages.add(ALERT_MESSAGES[alertIndex]);
-                    }
-                    vgm.sendAlertMessage();
-                    s_logger.info("Alert update sent for meter {}", vgm.getName());
-
-                } else {
-                    if (alertingMessages.size() > 1 || !alertingMessages.contains(VirtualGasMeter.LOCK_ALERT_MESSAGE)) {
-                        alertingMessages.clear();
-                        if (vgm.isLock()) {
-                            alertingMessages.add(VirtualGasMeter.LOCK_ALERT_MESSAGE);
-                        }
-                        vgm.sendAlertMessage();
-                        s_logger.info("Alert update sent for meter {}", vgm.getName());
-                    }
-                }
-            }
-            response = new KuraResponsePayload(200);
+        if (CONTROL_TOPIC_GET.equals(controlTopic)) {
+            response = getMeter(msg);
+        } else if (CONTROL_TOPIC_PATCH.equals(controlTopic)) {
+            response = updateMeter(msg);
+        } else if (CONTROL_TOPIC_POST.equals(controlTopic)) {
+            response = createMeter(msg);
+        } else if (CONTROL_TOPIC_DELETE.equals(controlTopic)) {
+            response = deleteMeter(msg);
+        } else if (CONTROL_TOPIC_MASSIVE_LOAD.equals(controlTopic)) {
+            response = massiveLoad(msg);
+        } else if (CONTROL_TOPIC_PING.equals(controlTopic)) {
+            response = ping();
         } else {
             s_logger.error("Unknown topic {}", controlTopic);
             response = new KuraResponsePayload(404);
@@ -285,7 +232,7 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
         String respApptopic = "REPLY/" + request.getRequestId();
         String respClientId = request.getRequesterClientId();
         try {
-            m_cloudClient.controlPublish(respClientId, respApptopic, response, 0, false, 0);
+            cloudClient.controlPublish(respClientId, respApptopic, response, 0, false, 0);
             s_logger.info("Published response message on topic {} for {}", respApptopic, respClientId);
         } catch (Exception e) {
             s_logger.error("Cannot publish response message on topic {} for {}: {}", respApptopic, respClientId,
@@ -293,94 +240,384 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
         }
     }
 
+    private KuraResponsePayload massiveLoad(KuraPayload msg) {
+        KuraResponsePayload response;
+        if (cronExpr == null) {
+            String errMsg = "Invalid cron expression in config prop " + PUBLISH_CRON_EXPR_PROP_NAME;
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+            return response;
+        }
+        if (refLatitude == null || refLongitude == null) {
+            String errMsg = "Invalid coordinates in config prop " + REFERENCE_LOCATION_PROP_NAME;
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+            return response;
+        }
+        Integer meterSize = (Integer) msg.getMetric("meter.size");
+        if (meterSize == null || meterSize <= 0) {
+            String errMsg = "Meter size parameter '" + meterSize + "' is invalid! It must be greater than 0";
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+            return response;
+        }
+        String meterPrefixName = (String) msg.getMetric("meter.prefix.name");
+        if (meterPrefixName == null || meterPrefixName.trim().length() == 0) {
+            String errMsg = "Meter prefix name '" + meterPrefixName
+                    + "' parameter is invalid! It must be not null or empty";
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+        }
+        Long startTimestamp = (Long) msg.getMetric("start.timestamp");
+        if (startTimestamp == null || startTimestamp <= 0) {
+            String errMsg = "Meter start timestamp '" + startTimestamp
+                    + "' parameter is invalid! It must be greater than 0";
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+        }
+
+        Date startDate = new Date(startTimestamp);
+        String meterID;
+        VirtualGasMeter meter;
+        for (int i = 0; i < meterSize; i++) {
+            meterID = meterPrefixName + i;
+            if (meters.get(meterID) != null) {
+                s_logger.error("Meter {} already exists! Skip it", meterID);
+                continue;
+            }
+
+            meter = new VirtualGasMeter(meterID, this, Optional.empty(), Optional.of(0D), Optional.of(100D),
+                    Optional.of(15D));
+            List<Date> fireTimes = CronUtils.getNextFireTimes(cronExpr, startDate, new Date());
+            for (Date t : fireTimes) {
+                meter.sendMetricMessage(t.getTime());
+            }
+            meters.put(meterID, meter);
+            s_logger.trace("Successfully meter {} load complete", meterID);
+        }
+
+        response = new KuraResponsePayload(200);
+        s_logger.info("Successfully massive load complete");
+        return response;
+    }
+
+    private KuraResponsePayload ping() {
+        KuraResponsePayload response;
+        response = new KuraResponsePayload(200);
+        response.setBody("PONG".getBytes());
+        s_logger.info("Successfully response to PING");
+        return response;
+    }
+
+    private KuraResponsePayload deleteMeter(KuraPayload msg) {
+        KuraResponsePayload response;
+        String meterID = (String) msg.getMetric("meter.id");
+        if (meterID == null) {
+            String errMsg = "Meter id parameter is null!";
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+        } else {
+            VirtualGasMeter currentVGM = meters.get(meterID);
+            if (currentVGM == null) {
+                String errMsg = "Meter " + meterID + " not found";
+                s_logger.error(errMsg);
+                response = new KuraResponsePayload(404);
+                response.setExceptionMessage(errMsg);
+            } else {
+                try {
+                    Set<String> activeAlertMsgs = currentVGM.getActiveAlertMsgs();
+                    if (!activeAlertMsgs.isEmpty()) {
+                        currentVGM.sendClearingCurrentAlertMessages();
+                    }
+
+                    ObjectMapper m = new ObjectMapper();
+                    response = new KuraResponsePayload(200);
+                    response.setBody(m.writeValueAsBytes(currentVGM));
+                    meters.remove(meterID);
+                    s_logger.info("Successfully deleting meter {}", meterID);
+                } catch (Exception e) {
+                    String errMsg = "Error deleting meter " + meterID + ": " + e.getMessage();
+                    s_logger.error(errMsg, e);
+                    response = new KuraResponsePayload(500);
+                    response.setExceptionMessage(errMsg);
+                }
+            }
+        }
+        return response;
+    }
+
+    private KuraResponsePayload createMeter(KuraPayload msg) {
+        KuraResponsePayload response;
+        String meterID = (String) msg.getMetric("meter.id");
+        if (meterID == null) {
+            String errMsg = "Meter id parameter is null!";
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+        } else {
+            VirtualGasMeter currentVGM = meters.get(meterID);
+            if (currentVGM != null) {
+                String errMsg = "Meter " + meterID + " already exists";
+                s_logger.error(errMsg);
+                response = new KuraResponsePayload(400);
+                response.setExceptionMessage(errMsg);
+            } else {
+                byte[] body = msg.getBody();
+                if (body == null) {
+                    String errMsg = "Body parameter is null!";
+                    s_logger.error(errMsg);
+                    response = new KuraResponsePayload(400);
+                    response.setExceptionMessage(errMsg);
+                } else {
+                    try {
+                        ObjectMapper m = new ObjectMapper();
+                        VirtualGasMeter addVGM = m.readValue(msg.getBody(), VirtualGasMeter.class);
+                        addVGM.setVirtualGasMeterGateway(this);
+                        if (!meterID.equals(addVGM.getId())) {
+                            String errMsg = "Unexpected specified meter!";
+                            s_logger.error(errMsg);
+                            response = new KuraResponsePayload(400);
+                            response.setExceptionMessage(errMsg);
+                        } else {
+                            if (cronExpr != null) {
+                                // Send metric message referred to previous metric fire time
+                                long timestamp = CronUtils.getPreviousFireTime(cronExpr, new Date()).getTime();
+                                addVGM.sendMetricMessage(timestamp);
+                            }
+
+                            // Check if send alert message in case of alert messages are not empty
+                            if (!addVGM.getActiveAlertMsgs().isEmpty()) {
+                                addVGM.sendCurrentAlertMessages();
+                            }
+
+                            meters.put(meterID, addVGM);
+                            response = new KuraResponsePayload(200);
+                            response.setBody(m.writeValueAsBytes(addVGM));
+                        }
+                        s_logger.info("Successfully adding meter {}", meterID);
+                    } catch (Exception e) {
+                        String errMsg = "Error adding meter " + meterID + ": " + e.getMessage();
+                        s_logger.error(errMsg, e);
+                        response = new KuraResponsePayload(500);
+                        response.setExceptionMessage(errMsg);
+                    }
+                }
+            }
+        }
+        return response;
+    }
+
+    private KuraResponsePayload updateMeter(KuraPayload msg) {
+        KuraResponsePayload response;
+        String meterID = (String) msg.getMetric("meter.id");
+        if (meterID == null) {
+            String errMsg = "Meter id parameter is null!";
+            s_logger.error(errMsg);
+            response = new KuraResponsePayload(400);
+            response.setExceptionMessage(errMsg);
+        } else {
+            VirtualGasMeter currentVGM = meters.get(meterID);
+            if (currentVGM == null) {
+                String errMsg = "Meter " + meterID + " not found";
+                s_logger.error(errMsg);
+                response = new KuraResponsePayload(404);
+                response.setExceptionMessage(errMsg);
+            } else {
+                byte[] body = msg.getBody();
+                if (body == null) {
+                    String errMsg = "Body parameter is null!";
+                    s_logger.error(errMsg);
+                    response = new KuraResponsePayload(400);
+                    response.setExceptionMessage(errMsg);
+                } else {
+                    try {
+                        ObjectMapper m = new ObjectMapper();
+                        VirtualGasMeter updateVGM = m.readValue(msg.getBody(), VirtualGasMeter.class);
+                        updateVGM.setVirtualGasMeterGateway(this);
+                        if (!meterID.equals(updateVGM.getId())) {
+                            String errMsg = "Unexpected specified meter!";
+                            s_logger.error(errMsg);
+                            response = new KuraResponsePayload(400);
+                            response.setExceptionMessage(errMsg);
+                        } else {
+                            s_logger.info("currentVGM: {}", currentVGM);
+                            s_logger.info("updateVGM: {}", updateVGM);
+
+                            if (cronExpr != null && !currentVGM.getGeohash().equals(updateVGM.getGeohash())) {
+                                s_logger.info("Updating last metric to change geohash of {}", meterID);
+                                // Send metric message referred to previous metric fire time
+                                long timestamp = CronUtils.getPreviousFireTime(cronExpr, new Date()).getTime();
+                                updateVGM.sendMetricMessage(timestamp);
+                            }
+
+                            // Check if send alert message in case of status change
+                            if (!currentVGM.getGeohash().equals(updateVGM.getGeohash())
+                                    && !currentVGM.getActiveAlertMsgs().isEmpty()) {
+                                s_logger.info("Clear old active alarm of {}", meterID);
+                                // Clear old active alarm in case of geohash change
+                                currentVGM.sendClearingCurrentAlertMessages();
+                                updateVGM.sendCurrentAlertMessages();
+                            } else if (!currentVGM.hasIdenticalActiveAlertMsgs(updateVGM)
+                                    || (currentVGM.isOffline() && !updateVGM.isOffline())) {
+                                // Send alarm (clearing and open) merging data
+                                Set<String> currentActiveAlertMsgs = currentVGM.getActiveAlertMsgs();
+                                if (!currentActiveAlertMsgs.isEmpty()) {
+                                    s_logger.debug("Merging current and update alerts");
+                                    Set<String> updateActiveAlertMsgs = updateVGM.getActiveAlertMsgs();
+                                    Set<String> updateClearingAlertMsgs = new HashSet<>(currentActiveAlertMsgs);
+                                    updateClearingAlertMsgs.removeAll(updateActiveAlertMsgs);
+                                    if (!updateClearingAlertMsgs.isEmpty()) {
+                                        s_logger.debug("Clearing alerts: {}", updateClearingAlertMsgs);
+                                        updateVGM.sendAlertMessages(updateVGM.makeAlerts(updateClearingAlertMsgs,
+                                                System.currentTimeMillis(), true), true);
+                                    }
+                                    updateActiveAlertMsgs.removeAll(currentActiveAlertMsgs);
+                                    if (!updateActiveAlertMsgs.isEmpty()) {
+                                        s_logger.debug("Open alerts: {}", updateActiveAlertMsgs);
+                                        updateVGM.setActiveAlertMsgs(updateActiveAlertMsgs);
+                                    }
+                                }
+                                updateVGM.sendCurrentAlertMessages();
+                            }
+
+                            meters.put(meterID, updateVGM);
+                            response = new KuraResponsePayload(200);
+                            response.setBody(m.writeValueAsBytes(updateVGM));
+                            s_logger.info("Successfully updating meter {}", meterID);
+                        }
+                    } catch (Exception e) {
+                        String errMsg = "Error updating meter " + meterID + ": " + e.getMessage();
+                        s_logger.error(errMsg, e);
+                        response = new KuraResponsePayload(500);
+                        response.setExceptionMessage(errMsg);
+                    }
+                }
+            }
+        }
+        return response;
+    }
+
+    private KuraResponsePayload getMeter(KuraPayload msg) {
+        KuraResponsePayload response;
+        String meterID = (String) msg.getMetric("meter.id");
+        try {
+            if (meterID == null) {
+                // Get all meter
+                boolean fullFetch = (Boolean) msg.getMetric("full.fetch");
+                Object[] body;
+                if (fullFetch) {
+                    body = meters.values().toArray();
+                } else {
+                    body = meters.keySet().toArray();
+                }
+                response = new KuraResponsePayload(200);
+                ObjectMapper m = new ObjectMapper();
+                response.setBody(m.writeValueAsBytes(body));
+                s_logger.info("Successfully reading all meter (full.fetch={})", fullFetch);
+            } else {
+                VirtualGasMeter virtualGasMeter = meters.get(meterID);
+                if (virtualGasMeter == null) {
+                    String errMsg = "Meter " + meterID + " not found";
+                    s_logger.error(errMsg);
+                    response = new KuraResponsePayload(404);
+                    response.setExceptionMessage(errMsg);
+                } else {
+                    response = new KuraResponsePayload(200);
+                    ObjectMapper m = new ObjectMapper();
+                    response.setBody(m.writeValueAsBytes(virtualGasMeter));
+                }
+                s_logger.info("Successfully reading meter {}", meterID);
+            }
+        } catch (Exception e) {
+            String errMsg = "Error reading meter " + meterID + ": " + e.getMessage();
+            s_logger.error(errMsg, e);
+            response = new KuraResponsePayload(500);
+            response.setExceptionMessage(errMsg);
+        }
+        return response;
+    }
+
     @Override
     public void onMessageArrived(String deviceId, String appTopic, KuraPayload msg, int qos, boolean retain) {
-        // s_logger.info("Message arrived: {} on {} {} {} {}", deviceId, appTopic, msg, qos, retain);
-
+        // Nothing to do
     }
 
     @Override
     public void onConnectionLost() {
-        // s_logger.warn("Connection lost");
-
+        // Nothing to do
     }
 
     @Override
     public void onConnectionEstablished() {
-        // s_logger.info("Connection established");
-
+        // Nothing to do
     }
 
     @Override
     public void onMessageConfirmed(int messageId, String appTopic) {
-        // s_logger.info("Message confirmed: {} on {}", messageId, appTopic);
-
+        // Nothing to do
     }
 
     @Override
     public void onMessagePublished(int messageId, String appTopic) {
-        // s_logger.info("Message published: {} on {}", messageId, appTopic);
-
+        // Nothing to do
     }
 
     private void doUpdate(boolean onUpdate) {
         synchronized (this) {
-            String cronExpr = (String) this.m_properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
-            if (cronExpr == null) {
-                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+            String tempCronExpr = (String) this.properties.get(PUBLISH_CRON_EXPR_PROP_NAME);
+            if (tempCronExpr == null) {
+                s_logger.error("Update VirtualGasMeterGateway - Properties do not contain {}",
                         VirtualGasMeterGateway.PUBLISH_CRON_EXPR_PROP_NAME);
                 return;
             }
-
-            int m_size;
-            if (!this.m_properties.containsKey(METER_SIZE_PROP_NAME)) {
-                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
-                        VirtualGasMeterGateway.METER_SIZE_PROP_NAME);
-                return;
-            } else {
-                m_size = (int) this.m_properties.get(METER_SIZE_PROP_NAME);
-                if (m_size < 1) {
-                    s_logger.error("Invalid {}. Must be equal or greater than 1",
-                            VirtualGasMeterGateway.METER_SIZE_PROP_NAME);
-                    return;
-                }
-            }
+            cronExpr = tempCronExpr;
 
             Double initialMeasure;
-            if (!this.m_properties.containsKey(INITIAL_MEASURE_PROP_NAME)) {
-                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+            if (!this.properties.containsKey(INITIAL_MEASURE_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeterGateway - Properties do not contain {}",
                         VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
                 return;
             } else {
-                initialMeasure = (Double) this.m_properties.get(INITIAL_MEASURE_PROP_NAME);
+                initialMeasure = (Double) this.properties.get(INITIAL_MEASURE_PROP_NAME);
                 if (initialMeasure < 0) {
-                    s_logger.error("Invalid {}. Must be positive", VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
+                    s_logger.error("Update VirtualGasMeterGateway - Invalid {}. Must be positive",
+                            VirtualGasMeterGateway.INITIAL_MEASURE_PROP_NAME);
                     return;
                 }
             }
 
             Double initialBatteryLevel;
-            if (!this.m_properties.containsKey(INITIAL_BATTERY_LEVEL_PROP_NAME)) {
-                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+            if (!this.properties.containsKey(INITIAL_BATTERY_LEVEL_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeterGateway - Properties do not contain {}",
                         VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
                 return;
             } else {
-                initialBatteryLevel = (Double) this.m_properties.get(INITIAL_BATTERY_LEVEL_PROP_NAME);
+                initialBatteryLevel = (Double) this.properties.get(INITIAL_BATTERY_LEVEL_PROP_NAME);
                 if (initialBatteryLevel < 0) {
-                    s_logger.error("Invalid {}. Must be positive",
+                    s_logger.error("Update VirtualGasMeterGateway - Invalid {}. Must be positive",
                             VirtualGasMeterGateway.INITIAL_BATTERY_LEVEL_PROP_NAME);
                     return;
                 }
             }
 
-            float lat;
-            float lon;
-            String refLocation = (String) this.m_properties.get(REFERENCE_LOCATION_PROP_NAME);
-            if (refLocation == null) {
-                s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+            if (!this.properties.containsKey(INITIAL_TEMEPERATURE_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeterGateway - Properties do not contain {}",
+                        VirtualGasMeterGateway.INITIAL_TEMEPERATURE_PROP_NAME);
+                return;
+            }
+
+            if (!this.properties.containsKey(REFERENCE_LOCATION_PROP_NAME)) {
+                s_logger.error("Update VirtualGasMeterGateway - Properties do not contain {}",
                         VirtualGasMeterGateway.REFERENCE_LOCATION_PROP_NAME);
                 return;
             } else {
+                String refLocation = (String) this.properties.get(REFERENCE_LOCATION_PROP_NAME);
                 String[] locData = refLocation.split(" ");
                 if (locData.length != 2) {
                     s_logger.error("Update VirtualGasMeterGateway - Invalid {}",
@@ -389,56 +626,60 @@ public class VirtualGasMeterGateway implements ConfigurableComponent, CloudClien
                 }
 
                 try {
-                    lat = Float.parseFloat(locData[0]);
+                    refLatitude = Float.parseFloat(locData[0]);
                 } catch (Exception e) {
                     s_logger.error("Update VirtualGasMeterGateway - Invalid latitude {}", locData[0]);
                     return;
                 }
                 try {
-                    lon = Float.parseFloat(locData[1]);
+                    refLongitude = Float.parseFloat(locData[1]);
                 } catch (Exception e) {
                     s_logger.error("Update VirtualGasMeterGateway - Invalid longitude {}", locData[1]);
                     return;
                 }
             }
 
-            if (m_size < meters.size()) {
-                for (int i = (meters.size() - 1); i >= m_size; i--) {
-                    meters.remove(METER_PREFIX_NAME + i);
-                }
-            } else {
-                float rLat, rLon;
+            // TODO Check other props
 
-                VirtualGasMeter meter;
-                for (int i = 0; i < m_size; i++) {
-                    meter = meters.get(METER_PREFIX_NAME + i);
-                    if (meter == null) {
-                        // increment lat and lon
-                        rLat = lat + (float) ((m_random.nextFloat() * 0.03) * (m_random.nextBoolean() ? 1 : -1));
-                        rLon = lon + (float) ((m_random.nextFloat() * 0.06) * (m_random.nextBoolean() ? 1 : -1));
-                        String geohash = GeoHash.withCharacterPrecision(rLat, rLon, 9).toBase32();
-                        meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, geohash, this));
+            if (!onUpdate && meters.isEmpty()) {
+                int initialMeterSize;
+                if (!this.properties.containsKey(INITIAL_METER_SIZE_PROP_NAME)) {
+                    s_logger.error("Update VirtualGasMeterGateway - Ignore as properties do not contain {}",
+                            VirtualGasMeterGateway.INITIAL_METER_SIZE_PROP_NAME);
+                    return;
+                } else {
+                    initialMeterSize = (int) this.properties.get(INITIAL_METER_SIZE_PROP_NAME);
+                    if (initialMeterSize < 0) {
+                        s_logger.error("Update VirtualGasMeterGateway - Invalid {}. Must be equal or greater than 0",
+                                VirtualGasMeterGateway.INITIAL_METER_SIZE_PROP_NAME);
+                        return;
                     }
                 }
 
+                for (int i = 0; i < initialMeterSize; i++) {
+                    try {
+                        meters.put(METER_PREFIX_NAME + i, new VirtualGasMeter(METER_PREFIX_NAME + i, this));
+                    } catch (Exception e) {
+                        s_logger.error("Update VirtualGasMeterGateway - Error creating VirtualGasMeterGateway {}: {}",
+                                METER_PREFIX_NAME + i, e.getMessage());
+                    }
+                }
             }
 
             if (trigger != null) {
                 try {
                     scheduler.unscheduleJob(trigger.getKey());
                 } catch (SchedulerException e) {
-                    s_logger.error("Error scheduling old sender job", e);
+                    s_logger.error("Update VirtualGasMeterGateway - Error unscheduling old sender job", e);
                 }
             }
 
-            trigger = TriggerBuilder.newTrigger().withIdentity("trigger", "group")
-                    .withSchedule(CronScheduleBuilder.cronSchedule(cronExpr)).build();
-
-            // schedule a new worker based on the properties of the service
             try {
+                trigger = TriggerBuilder.newTrigger().withIdentity("trigger", "group")
+                        .withSchedule(CronScheduleBuilder.cronSchedule(cronExpr)).build();
                 scheduler.scheduleJob(sendMeasureJob, trigger);
             } catch (SchedulerException e) {
-                s_logger.error("Error scheduling sender job", e);
+                s_logger.error("Update VirtualGasMeterGateway - Error scheduling sender job", e);
             }
 
         }
